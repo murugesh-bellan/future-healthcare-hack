@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useEveAgent } from "eve/react";
 import { TopBar } from "@/components/TopBar";
 import { analyzeVoiceSignals, withSpeechRate, type VoiceSignals } from "@/lib/voice-signals";
@@ -21,16 +22,43 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   return Promise.race([promise, timeout]);
 }
 
+/** Calm, non-clinical labels for the post-check-in "what we heard" summary. */
+function formatSignalSummary(signals: VoiceSignals): { label: string; value: string }[] {
+  const rows: { label: string; value: string }[] = [];
+  if (signals.meanPitchHz !== null) {
+    rows.push({ label: "Pitch", value: `${Math.round(signals.meanPitchHz)} Hz` });
+  }
+  if (signals.pauseRatio !== null && Number.isFinite(signals.pauseRatio)) {
+    rows.push({ label: "Pause ratio", value: `${Math.round(signals.pauseRatio * 100)}%` });
+  }
+  if (signals.speechRateWpm !== null) {
+    rows.push({ label: "Speech rate", value: `${signals.speechRateWpm} wpm` });
+  }
+  if (signals.jitterPercent !== null) {
+    rows.push({ label: "Jitter", value: `${signals.jitterPercent.toFixed(1)}%` });
+  }
+  if (signals.shimmerPercent !== null) {
+    rows.push({ label: "Shimmer", value: `${signals.shimmerPercent.toFixed(1)}%` });
+  }
+  if (signals.durationSeconds > 0) {
+    rows.push({ label: "Duration", value: `${signals.durationSeconds.toFixed(1)}s` });
+  }
+  return rows;
+}
+
 export default function CheckInPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [statusText, setStatusText] = useState("Tap to speak");
   const [replyText, setReplyText] = useState("");
   const [errorText, setErrorText] = useState("");
   const [barHeights, setBarHeights] = useState([16, 32, 48, 24, 40]);
+  const [heardSignals, setHeardSignals] = useState<VoiceSignals | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Keep latest signals for onFinish without re-binding the agent each turn.
+  const pendingSignalsRef = useRef<VoiceSignals | null>(null);
 
   const agent = useEveAgent({
     onFinish: (snapshot) => {
@@ -41,6 +69,7 @@ export default function CheckInPage() {
           .map((part) => ("text" in part ? part.text : ""))
           .join(" ")
           .trim() ?? "";
+      setHeardSignals(pendingSignalsRef.current);
       void handleAgentReply(text || DEFAULT_REPLY);
     },
     onError: (err) => {
@@ -143,6 +172,7 @@ export default function CheckInPage() {
 
       const signals = await signalsPromise;
       const voiceSignals = signals ? withSpeechRate(signals, body.text) : null;
+      pendingSignalsRef.current = voiceSignals;
 
       await agent.send({
         message: body.text,
@@ -199,7 +229,11 @@ export default function CheckInPage() {
     setPhase("ready");
     setStatusText("Tap to speak");
     setReplyText("");
+    setHeardSignals(null);
+    pendingSignalsRef.current = null;
   }
+
+  const signalRows = heardSignals ? formatSignalSummary(heardSignals) : [];
 
   return (
     <>
@@ -284,12 +318,41 @@ export default function CheckInPage() {
                   <h3 className="text-headline-md text-primary">Logged!</h3>
                   <p className="leading-relaxed text-body-md text-on-surface">{replyText}</p>
                 </div>
-                <button
-                  onClick={resetFlow}
-                  className="mt-4 rounded-full bg-secondary-container px-6 py-3 text-label-md text-on-secondary-container transition-transform active:scale-95"
-                >
-                  Back to Dashboard
-                </button>
+
+                {signalRows.length > 0 ? (
+                  <div className="w-full space-y-2 rounded-md bg-surface-container-low/80 p-3">
+                    <p className="text-label-sm text-on-surface-variant uppercase tracking-wider">What we heard</p>
+                    <p className="text-label-sm text-on-surface-variant/80">
+                      Illustrative acoustic signals for your wellness trend — not a medical reading.
+                    </p>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1">
+                      {signalRows.map((row) => (
+                        <div key={row.label} className="flex flex-col">
+                          <dt className="text-label-sm text-on-surface-variant">{row.label}</dt>
+                          <dd className="text-body-md text-on-surface">{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : null}
+
+                <div className="mt-2 flex w-full flex-col gap-2">
+                  <Link
+                    href="/"
+                    className="rounded-full bg-primary px-6 py-3 text-center text-label-md font-semibold text-on-primary transition-transform active:scale-95"
+                  >
+                    See Strength Score
+                  </Link>
+                  <Link
+                    href="/trends"
+                    className="rounded-full bg-secondary-container px-6 py-3 text-center text-label-md text-on-secondary-container transition-transform active:scale-95"
+                  >
+                    View trends
+                  </Link>
+                  <button onClick={resetFlow} className="py-2 text-label-md text-on-surface-variant">
+                    Check in again
+                  </button>
+                </div>
               </div>
             </div>
           </section>

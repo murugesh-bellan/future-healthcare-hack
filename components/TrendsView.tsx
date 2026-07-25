@@ -20,6 +20,7 @@ export function TrendsView({ points, source }: { points: TrendPoint[]; source: D
   const delta = percentChange(visible);
   const deltaLabel = `${delta >= 0 ? "+" : ""}${delta}% ${WINDOW_LABELS[window]}`;
   const scores = visible.map((p) => p.score);
+  const checkInsLogged = visible.reduce((sum, p) => sum + (p.checkInCount ?? 0), 0);
   const trendingUp = delta >= 0;
 
   return (
@@ -59,7 +60,7 @@ export function TrendsView({ points, source }: { points: TrendPoint[]; source: D
       <div className="grid grid-cols-2 gap-gutter">
         <div className="flex flex-col gap-2 rounded-lg bg-surface-container p-5">
           <span className="text-label-sm text-on-surface-variant">Check-ins logged</span>
-          <span className="text-headline-md text-on-surface">{visible.length}</span>
+          <span className="text-headline-md text-on-surface">{checkInsLogged}</span>
         </div>
         <div className="flex flex-col gap-2 rounded-lg bg-surface-container p-5">
           <span className="text-label-sm text-on-surface-variant">Range this period</span>

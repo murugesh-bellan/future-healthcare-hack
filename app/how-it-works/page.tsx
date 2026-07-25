@@ -107,7 +107,8 @@ export default function HowItWorksPage() {
             <div className="flex items-center gap-2 rounded-full border border-outline-variant/20 bg-surface-container-low px-4 py-2">
               <span className="material-symbols-outlined text-[16px] text-on-surface-variant">lock</span>
               <span className="text-center text-label-sm text-on-surface-variant">
-                Your voice is processed securely and not stored after analysis.
+                Raw audio isn&apos;t kept. We store your transcript and illustrative voice signals to build your trends —
+                wellness tracking, not a diagnosis.
               </span>
             </div>
           </div>

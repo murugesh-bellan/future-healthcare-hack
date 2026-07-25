@@ -2,14 +2,14 @@ import Link from "next/link";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/BottomNav";
 import { TrendChart } from "@/components/TrendChart";
-import { MoodChips } from "@/components/MoodChips";
+import { DataSourceBadge } from "@/components/DataSourceBadge";
 import { loadTrend } from "@/lib/trend-data";
 import { percentChange, pointsInWindow } from "@/lib/trend";
 
 const RING_CIRCUMFERENCE = 283;
 
 export default async function HomePage() {
-  const { points } = await loadTrend();
+  const { points, source } = await loadTrend();
   const week = pointsInWindow(points, 7);
   const currentScore = week[week.length - 1]?.score ?? 0;
   const delta = percentChange(week);
@@ -60,6 +60,9 @@ export default async function HomePage() {
             </div>
           </div>
           <p className="mt-stack-lg max-w-xs px-4 text-center text-body-lg text-on-surface">{summary}</p>
+          <div className="mt-stack-sm">
+            <DataSourceBadge source={source} />
+          </div>
         </section>
 
         <Link href="/trends" className="mt-stack-md block w-full transition-transform active:scale-[0.99]">
@@ -92,8 +95,7 @@ export default async function HomePage() {
             >
               <span className="material-symbols-outlined text-[32px] text-on-primary-container">mic</span>
             </Link>
-            <p className="mt-stack-md text-label-md text-on-surface-variant">Tap to talk or type a note</p>
-            <MoodChips />
+            <p className="mt-stack-md text-label-md text-on-surface-variant">Tap to talk</p>
           </div>
         </section>
 
