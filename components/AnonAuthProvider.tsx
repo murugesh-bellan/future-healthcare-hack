@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase";
 
 /**
- * Fixed demo personas, seeded by scripts/seed-demo-patients.mjs. Not real
- * secrets — just stable identifiers so the same two patients are reachable
- * across devices/sessions during demos and testing.
+ * Public-safe persona metadata only — id and label, nothing that grants
+ * access. The actual credentials live server-side in lib/demo-personas.ts
+ * and are never sent to the client; picking a persona here just posts its id
+ * (plus the access code below) to /api/demo-login, which performs the real
+ * sign-in and enforces who's allowed to.
  */
-const PERSONAS = [
-  { label: "Patient A", email: "demo-a@undertone.local", password: "undertone-demo-a-2026" },
-  { label: "Patient B", email: "demo-b@undertone.local", password: "undertone-demo-b-2026" },
+const PERSONA_OPTIONS = [
+  { id: "a", label: "Patient A" },
+  { id: "b", label: "Patient B" },
 ] as const;
 
 type Status = "checking" | "picking" | "signing-in" | "ready" | "error";
@@ -20,11 +22,15 @@ type Status = "checking" | "picking" | "signing-in" | "ready" | "error";
  * reads/writes and the Eve channel's session auth always have a stable user
  * id. Instead of anonymous sign-in, this presents a picker between two fixed
  * demo personas — appropriate while this is a demo/testing build, not yet
- * open to real anonymous visitors.
+ * open to real anonymous visitors. Sign-in happens server-side (see
+ * app/api/demo-login) behind a shared access code, so the demo credentials
+ * never reach the browser and the endpoint isn't a public "become any demo
+ * patient" route.
  */
 export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>("checking");
   const [error, setError] = useState<string | null>(null);
+  const [accessCode, setAccessCode] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -44,15 +50,19 @@ export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function pickPersona(persona: (typeof PERSONAS)[number]) {
+  async function pickPersona(personaId: (typeof PERSONA_OPTIONS)[number]["id"]) {
     setStatus("signing-in");
     try {
-      const { error: signInError } = await supabaseBrowser().auth.signInWithPassword({
-        email: persona.email,
-        password: persona.password,
+      const res = await fetch("/api/demo-login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ personaId, accessCode }),
       });
-      if (signInError) throw signInError;
-      setStatus("ready");
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Could not sign in.");
+      // Full reload so the browser client (and this provider) picks up the
+      // session cookie the server just set, rather than trying to sync it in-place.
+      window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
       setStatus("error");
@@ -63,8 +73,11 @@ export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
 
   if (status === "error") {
     return (
-      <main className="flex min-h-screen items-center justify-center px-container-margin text-center">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-stack-md px-container-margin text-center">
         <p className="text-body-md text-on-surface-variant">{error}</p>
+        <button onClick={() => setStatus("picking")} className="text-label-md text-primary">
+          Try again
+        </button>
       </main>
     );
   }
@@ -73,12 +86,21 @@ export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-stack-lg px-container-margin text-center">
         <h1 className="text-headline-md text-on-surface">Who's checking in?</h1>
+        <input
+          type="password"
+          value={accessCode}
+          onChange={(event) => setAccessCode(event.target.value)}
+          placeholder="Access code"
+          aria-label="Access code"
+          className="w-full max-w-xs rounded-full border border-outline-variant/30 bg-surface-container-low px-5 py-3 text-center text-body-md text-on-surface"
+        />
         <div className="flex flex-col gap-stack-sm">
-          {PERSONAS.map((persona) => (
+          {PERSONA_OPTIONS.map((persona) => (
             <button
-              key={persona.email}
-              onClick={() => pickPersona(persona)}
-              className="rounded-full bg-primary px-8 py-3 text-label-md font-semibold text-on-primary transition-transform active:scale-95"
+              key={persona.id}
+              onClick={() => pickPersona(persona.id)}
+              disabled={!accessCode.trim()}
+              className="rounded-full bg-primary px-8 py-3 text-label-md font-semibold text-on-primary transition-transform active:scale-95 disabled:opacity-50"
             >
               {persona.label}
             </button>

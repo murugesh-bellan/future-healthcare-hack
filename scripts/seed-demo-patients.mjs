@@ -28,11 +28,18 @@ const supabase = createClient(url, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// These are fixed demo identifiers, not real secrets — intentionally simple
-// and mirrored in components/AnonAuthProvider.tsx.
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing ${name} in .env`);
+  return value;
+}
+
+// Single source of truth for both the seed script and lib/demo-personas.ts —
+// no credentials duplicated in source. Re-running this script rotates the
+// live password to whatever's currently in .env.
 const PERSONAS = [
-  { label: "Patient A", email: "demo-a@undertone.local", password: "undertone-demo-a-2026" },
-  { label: "Patient B", email: "demo-b@undertone.local", password: "undertone-demo-b-2026" },
+  { label: "Patient A", email: requireEnv("DEMO_PATIENT_A_EMAIL"), password: requireEnv("DEMO_PATIENT_A_PASSWORD") },
+  { label: "Patient B", email: requireEnv("DEMO_PATIENT_B_EMAIL"), password: requireEnv("DEMO_PATIENT_B_PASSWORD") },
 ];
 
 async function findExistingUserByEmail(email) {
@@ -62,7 +69,11 @@ async function seedPersona({ label, email, password }) {
     user = data.user;
     console.log(`${label}: created auth user ${user.id}`);
   } else {
-    console.log(`${label}: auth user already exists (${user.id})`);
+    // Rotate to whatever password is currently in .env, so re-running this
+    // script after changing .env actually changes the live credential.
+    const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, { password });
+    if (updateError) throw updateError;
+    console.log(`${label}: auth user already exists (${user.id}) — password rotated`);
   }
 
   const { data: existingPatient, error: selectError } = await supabase
@@ -81,7 +92,11 @@ async function seedPersona({ label, email, password }) {
     if (insertError) throw insertError;
     console.log(`${label}: created patient row ${created.id} (pre-consented)`);
   } else if (!existingPatient.consented_at) {
-    await supabase.from("patients").update({ consented_at: new Date().toISOString() }).eq("id", existingPatient.id);
+    const { error: updateError } = await supabase
+      .from("patients")
+      .update({ consented_at: new Date().toISOString() })
+      .eq("id", existingPatient.id);
+    if (updateError) throw updateError;
     console.log(`${label}: patient row ${existingPatient.id} existed but wasn't consented — fixed`);
   } else {
     console.log(`${label}: patient row ${existingPatient.id} already consented`);
