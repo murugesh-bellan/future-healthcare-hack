@@ -14,7 +14,10 @@ export interface VoiceSignals {
   shimmerPercent: number | null;
   meanEnergyRms: number;
   pauseRatio: number;
+  /** Total decoded recording length, including silence. */
   durationSeconds: number;
+  /** Sum of frames classified as voiced (rms above threshold and a pitch estimate found) — excludes pauses/silence. */
+  voicedSegmentDurationSeconds: number;
   speechRateWpm: number | null;
 }
 
@@ -143,6 +146,8 @@ export function analyzeVoiceSignals(samples: Float32Array, sampleRate: number): 
   const meanEnergyRms = frameRms.length > 0 ? mean(frameRms) : 0;
   const silentFrames = frameRms.filter((rms) => rms < SILENCE_RMS_THRESHOLD).length;
   const pauseRatio = frameRms.length > 0 ? silentFrames / frameRms.length : 0;
+  // Each voiced frame contributes one non-overlapping HOP_SIZE-wide slice of audio.
+  const voicedSegmentDurationSeconds = (voicedPitchesHz.length * HOP_SIZE) / analysisRate;
 
   return {
     meanPitchHz,
@@ -152,6 +157,7 @@ export function analyzeVoiceSignals(samples: Float32Array, sampleRate: number): 
     meanEnergyRms,
     pauseRatio,
     durationSeconds,
+    voicedSegmentDurationSeconds,
     speechRateWpm: null,
   };
 }
