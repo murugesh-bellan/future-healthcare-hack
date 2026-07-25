@@ -9,6 +9,17 @@ type Phase = "loading" | "consent" | "ready" | "recording" | "processing" | "suc
 
 const DEFAULT_REPLY = "Logged. Thanks for checking in.";
 const MAX_RECORDING_MS = 20_000;
+const SIGNALS_TIMEOUT_MS = 1500;
+
+/**
+ * Caps how long we'll wait on `promise` before falling back — timer starts
+ * immediately (not when this is awaited), so if the caller does other async
+ * work first, that time already counts against the budget.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  const timeout = new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms));
+  return Promise.race([promise, timeout]);
+}
 
 export default function CheckInPage() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -118,8 +129,10 @@ export default function CheckInPage() {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
 
       // Decode + analyze runs concurrently with the transcribe network call —
-      // acoustic analysis is best-effort and must never add to the wait.
-      const signalsPromise = analyzeAudioBlob(blob);
+      // acoustic analysis is best-effort and must never add to the wait, so
+      // it's capped at SIGNALS_TIMEOUT_MS starting from right now (not from
+      // whenever we get around to awaiting it below).
+      const signalsPromise = withTimeout(analyzeAudioBlob(blob), SIGNALS_TIMEOUT_MS, null);
 
       const formData = new FormData();
       formData.append("audio", blob, "check-in.webm");
@@ -145,18 +158,21 @@ export default function CheckInPage() {
 
   /** Best-effort: a failed decode/analysis must never block the check-in. */
   async function analyzeAudioBlob(blob: Blob): Promise<VoiceSignals | null> {
+    let audioContext: AudioContext | null = null;
     try {
       const AudioContextClass =
         window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioContext = new AudioContextClass();
+      audioContext = new AudioContextClass();
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       const samples = audioBuffer.getChannelData(0);
-      const signals = analyzeVoiceSignals(samples, audioBuffer.sampleRate);
-      void audioContext.close();
-      return signals;
+      return analyzeVoiceSignals(samples, audioBuffer.sampleRate);
     } catch {
       return null;
+    } finally {
+      // Always release the context — repeated failed decodes would otherwise
+      // leak AudioContext instances and exhaust the browser's audio resources.
+      void audioContext?.close();
     }
   }
 
