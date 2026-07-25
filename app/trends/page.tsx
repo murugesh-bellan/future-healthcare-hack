@@ -1,15 +1,10 @@
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/BottomNav";
 import { TrendsView } from "@/components/TrendsView";
-import { loadTrend } from "@/lib/trend-data";
-import { loadBiomarkers } from "@/lib/biomarkers-data";
+import { loadTrendsPageData } from "@/lib/dashboard-data";
 
 export default async function TrendsPage() {
-  const [{ points, source: trendSource }, { series, source: biomarkerSource }] = await Promise.all([
-    loadTrend(),
-    loadBiomarkers(),
-  ]);
-  const source = trendSource === "live" && biomarkerSource === "live" ? "live" : "sample";
+  const { points, series, source } = await loadTrendsPageData();
 
   return (
     <>

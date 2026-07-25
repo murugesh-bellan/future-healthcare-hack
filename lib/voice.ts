@@ -22,14 +22,20 @@ export async function transcribeVoiceNote(audio: Blob) {
   return response.json() as Promise<{ text: string; language_code?: string }>;
 }
 
-export async function createVoiceReply(text: string) {
+/**
+ * Uses ElevenLabs' streaming endpoint and returns the raw Response so the
+ * caller can forward `response.body` straight through instead of buffering
+ * the whole clip here first — overlaps the ElevenLabs→server and
+ * server→browser transfers instead of fully serializing them.
+ */
+export async function createVoiceReply(text: string): Promise<Response> {
   const voiceId = process.env.ELEVENLABS_VOICE_ID;
   if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is not configured.");
-  const response = await fetch(`${elevenLabsUrl}/text-to-speech/${voiceId}`, {
+  const response = await fetch(`${elevenLabsUrl}/text-to-speech/${voiceId}/stream`, {
     method: "POST",
     headers: { ...elevenLabsHeaders(), "Content-Type": "application/json", Accept: "audio/mpeg" },
     body: JSON.stringify({ text, model_id: "eleven_flash_v2_5" }),
   });
   if (!response.ok) throw new Error(`ElevenLabs speech generation failed: ${response.status}`);
-  return response.blob();
+  return response;
 }

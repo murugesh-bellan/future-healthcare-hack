@@ -32,10 +32,52 @@ const FEATURE_ORDER = [
 ];
 
 /**
+ * Pure: derives each acoustic biomarker feature's recent time series from
+ * already-fetched check-ins and biomarker rows. Factored out of
+ * `loadBiomarkers` so `lib/dashboard-data.ts` can reuse it against a single
+ * shared fetch instead of each caller re-querying Supabase independently.
+ */
+export function deriveBiomarkerSeries(
+  checkIns: Pick<CheckInRow, "id" | "created_at">[],
+  biomarkers: Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value" | "units">[],
+): BiomarkerSeries[] {
+  const checkInById = new Map(checkIns.map((r) => [r.id, r]));
+
+  // Postgres does not guarantee row order for `.in(...)`, so each point carries
+  // its check-in's created_at for sorting below rather than relying on query order.
+  const byFeature = new Map<string, { unit: string | null; points: (BiomarkerPoint & { createdAt: string })[] }>();
+  for (const row of biomarkers) {
+    if (row.raw_value === null) continue;
+    const checkIn = checkInById.get(row.check_in_id);
+    if (!checkIn) continue;
+    const entry = byFeature.get(row.feature_name) ?? { unit: row.units, points: [] };
+    entry.points.push({ date: checkIn.created_at.slice(0, 10), value: row.raw_value, createdAt: checkIn.created_at });
+    byFeature.set(row.feature_name, entry);
+  }
+
+  return FEATURE_ORDER.filter((name) => byFeature.has(name)).map((name) => {
+    const entry = byFeature.get(name)!;
+    const sorted = [...entry.points].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const points = sorted.slice(-MAX_POINTS_PER_FEATURE).map(({ date, value }) => ({ date, value }));
+    return {
+      featureName: name,
+      label: FEATURE_LABELS[name] ?? name,
+      unit: entry.unit ?? "",
+      latestValue: points.length > 0 ? points[points.length - 1].value : null,
+      points,
+    };
+  });
+}
+
+/**
  * Loads each acoustic biomarker feature's recent time series for the signed-in
  * patient, oldest first, for the "Voice Signals" dashboard on Trends. Falls
  * back to bundled sample data (reported in `source`) whenever there's no
  * session, no patient row yet, no recordings in range, or the query fails.
+ *
+ * Standalone entry point. `/trends` uses `loadTrendsPageData` in
+ * `lib/dashboard-data.ts` instead, which shares one fetch between this and
+ * `loadTrend` rather than each querying separately.
  */
 export async function loadBiomarkers(): Promise<{ series: BiomarkerSeries[]; source: DataSource }> {
   try {
@@ -60,40 +102,16 @@ export async function loadBiomarkers(): Promise<{ series: BiomarkerSeries[]; sou
     const rows = (checkIns ?? []) as Pick<CheckInRow, "id" | "created_at">[];
     if (rows.length === 0) throw new Error("No recordings in range.");
 
-    const checkInById = new Map(rows.map((r) => [r.id, r]));
     const { data: biomarkers, error: biomarkersError } = await supabase
       .from("acoustic_biomarkers")
       .select("check_in_id, feature_name, raw_value, units")
       .in("check_in_id", rows.map((r) => r.id));
     if (biomarkersError) throw biomarkersError;
 
-    // Postgres does not guarantee row order for `.in(...)`, so each point carries
-    // its check-in's created_at for sorting below rather than relying on query order.
-    const byFeature = new Map<string, { unit: string | null; points: (BiomarkerPoint & { createdAt: string })[] }>();
-    for (const row of (biomarkers ?? []) as Pick<
-      AcousticBiomarkerRow,
-      "check_in_id" | "feature_name" | "raw_value" | "units"
-    >[]) {
-      if (row.raw_value === null) continue;
-      const checkIn = checkInById.get(row.check_in_id);
-      if (!checkIn) continue;
-      const entry = byFeature.get(row.feature_name) ?? { unit: row.units, points: [] };
-      entry.points.push({ date: checkIn.created_at.slice(0, 10), value: row.raw_value, createdAt: checkIn.created_at });
-      byFeature.set(row.feature_name, entry);
-    }
-
-    const series: BiomarkerSeries[] = FEATURE_ORDER.filter((name) => byFeature.has(name)).map((name) => {
-      const entry = byFeature.get(name)!;
-      const sorted = [...entry.points].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      const points = sorted.slice(-MAX_POINTS_PER_FEATURE).map(({ date, value }) => ({ date, value }));
-      return {
-        featureName: name,
-        label: FEATURE_LABELS[name] ?? name,
-        unit: entry.unit ?? "",
-        latestValue: points.length > 0 ? points[points.length - 1].value : null,
-        points,
-      };
-    });
+    const series = deriveBiomarkerSeries(
+      rows,
+      (biomarkers ?? []) as Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value" | "units">[],
+    );
     if (series.length === 0) throw new Error("No biomarker rows yet.");
 
     return { series, source: "live" };

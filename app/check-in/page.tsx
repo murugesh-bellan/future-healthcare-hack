@@ -21,6 +21,18 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   return Promise.race([promise, timeout]);
 }
 
+/** Shared with onFinish — pulls the plain-text content out of the latest assistant message. */
+function extractAssistantText(messages: readonly { role: string; parts: readonly { type: string; text?: string }[] }[]): string {
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  return (
+    lastAssistant?.parts
+      .filter((part) => part.type === "text")
+      .map((part) => ("text" in part ? (part.text ?? "") : ""))
+      .join(" ")
+      .trim() ?? ""
+  );
+}
+
 export default function CheckInPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [statusText, setStatusText] = useState("Tap to speak");
@@ -34,13 +46,7 @@ export default function CheckInPage() {
 
   const agent = useEveAgent({
     onFinish: (snapshot) => {
-      const lastAssistant = [...snapshot.data.messages].reverse().find((m) => m.role === "assistant");
-      const text =
-        lastAssistant?.parts
-          .filter((part) => part.type === "text")
-          .map((part) => ("text" in part ? part.text : ""))
-          .join(" ")
-          .trim() ?? "";
+      const text = extractAssistantText(snapshot.data.messages);
       void handleAgentReply(text || DEFAULT_REPLY);
     },
     onError: (err) => {
@@ -48,6 +54,10 @@ export default function CheckInPage() {
       setPhase("error");
     },
   });
+
+  // Live-updating reply text as the model streams it — the whole point is to
+  // stop showing a static "Processing…" for the entire turn.
+  const liveReplyText = agent.status === "streaming" ? extractAssistantText(agent.data.messages) : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -236,7 +246,7 @@ export default function CheckInPage() {
           </section>
         ) : null}
 
-        {phase === "ready" || phase === "recording" || phase === "processing" ? (
+        {(phase === "ready" || phase === "recording" || phase === "processing") && !liveReplyText ? (
           <section className="z-10 flex flex-col items-center gap-stack-lg text-center">
             <div className="relative flex h-48 w-48 items-center justify-center">
               {phase !== "recording" ? (
@@ -268,6 +278,20 @@ export default function CheckInPage() {
                 {phase === "recording" ? <span className="absolute inset-0 animate-ping rounded-full bg-primary/50" /> : null}
               </button>
               <p className="text-label-md tracking-wide text-on-surface-variant">{statusText}</p>
+            </div>
+          </section>
+        ) : null}
+
+        {phase === "processing" && liveReplyText ? (
+          <section className="z-10 flex w-full max-w-md flex-col items-center">
+            <div className="relative w-full overflow-hidden rounded-lg border border-white/5 bg-surface-container p-stack-lg shadow-lg">
+              <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
+              <div className="flex flex-col items-start gap-stack-md">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-container text-on-primary-container">
+                  <span className="material-symbols-outlined animate-pulse">graphic_eq</span>
+                </div>
+                <p className="leading-relaxed text-body-md text-on-surface">{liveReplyText}</p>
+              </div>
             </div>
           </section>
         ) : null}
