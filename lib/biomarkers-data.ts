@@ -31,12 +31,7 @@ const FEATURE_ORDER = [
   "VoicedSegmentDuration",
 ];
 
-/**
- * Pure: derives each acoustic biomarker feature's recent time series from
- * already-fetched check-ins and biomarker rows. Factored out of
- * `loadBiomarkers` so `lib/dashboard-data.ts` can reuse it against a single
- * shared fetch instead of each caller re-querying Supabase independently.
- */
+/** Pure: derives each acoustic biomarker feature's recent time series from already-fetched check-ins and biomarker rows. */
 export function deriveBiomarkerSeries(
   checkIns: Pick<CheckInRow, "id" | "created_at">[],
   biomarkers: Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value" | "units">[],
@@ -74,10 +69,6 @@ export function deriveBiomarkerSeries(
  * patient, oldest first, for the "Voice Signals" dashboard on Trends. Falls
  * back to bundled sample data (reported in `source`) whenever there's no
  * session, no patient row yet, no recordings in range, or the query fails.
- *
- * Standalone entry point. `/trends` uses `loadTrendsPageData` in
- * `lib/dashboard-data.ts` instead, which shares one fetch between this and
- * `loadTrend` rather than each querying separately.
  */
 export async function loadBiomarkers(): Promise<{ series: BiomarkerSeries[]; source: DataSource }> {
   try {

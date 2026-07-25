@@ -6,13 +6,21 @@ const voiceSignalsSchema = z
   .object({
     meanPitchHz: z.number().nullable().optional(),
     pitchStdHz: z.number().nullable().optional(),
+    f0Cv: z.number().nullable().optional(),
     jitterPercent: z.number().nullable().optional(),
     shimmerPercent: z.number().nullable().optional(),
+    zcr: z.number().optional(),
+    hnrDb: z.number().nullable().optional(),
+    alphaRatioDb: z.number().optional(),
     meanEnergyRms: z.number().nullable().optional(),
+    energyNormalized: z.number().optional(),
     pauseRatio: z.number().nullable().optional(),
+    voicedRatio: z.number().optional(),
     speechRateWpm: z.number().nullable().optional(),
+    speechRateSyllPerSec: z.number().nullable().optional(),
     durationSeconds: z.number().nullable().optional(),
     voicedSegmentDurationSeconds: z.number().nullable().optional(),
+    signalQuality: z.enum(["high", "medium", "low"]).optional(),
   })
   .optional();
 

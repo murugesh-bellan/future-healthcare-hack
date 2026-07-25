@@ -771,5 +771,51 @@
         }
       ]
     }
-  ]
+  ],
+  "decomposition": {
+    "scoreValue": 74,
+    "confidence": 0.9,
+    "rows": [
+      {
+        "subsystem": "functional_capacity",
+        "contribution": 8.4,
+        "weight": 0.6
+      },
+      {
+        "subsystem": "fatigue_index",
+        "contribution": -3.2,
+        "weight": -0.2
+      },
+      {
+        "subsystem": "phonation_efficiency",
+        "contribution": 2.1,
+        "weight": 0.2
+      }
+    ]
+  },
+  "drift": {
+    "direction": "recovering",
+    "changePointDetected": false,
+    "trendSlope": 0.42,
+    "zScore": 0.35
+  },
+  "frailty": {
+    "axes": [
+      {
+        "axis": "energy_based_frailty",
+        "coefficientContribution": -0.28,
+        "confidence": 0.9
+      },
+      {
+        "axis": "sarcopenia_based_frailty",
+        "coefficientContribution": 0.09,
+        "confidence": 0.9
+      }
+    ],
+    "citation": {
+      "source": "Vocal biomarkers of sarcopenic frailty",
+      "finding": "Zero-crossing rate and shimmer log-odds coefficients (ln(OR)=-0.21 and 0.29) from a JMIR 2024 logistic-regression study predicting binary energy-based and sarcopenia-based frailty phenotypes.",
+      "url": null
+    }
+  }
 }

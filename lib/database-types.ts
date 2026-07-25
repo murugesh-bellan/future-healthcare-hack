@@ -104,6 +104,18 @@ export interface FunctionalBiomarkerRow {
   created_at: string;
 }
 
+export type FrailtyAxis = "energy_based_frailty" | "sarcopenia_based_frailty";
+
+export interface FrailtyAssessmentRow {
+  id: string;
+  check_in_id: string;
+  axis: FrailtyAxis;
+  /** Cited coefficient × measured feature only — not a complete model log-odds. See lib/scoring.ts's FrailtyAxisResult doc comment. */
+  coefficient_contribution: number;
+  confidence: number;
+  created_at: string;
+}
+
 export interface StrengthScoreRow {
   id: string;
   check_in_id: string;
@@ -131,8 +143,14 @@ export interface LongitudinalBaselineRow {
   window_days: number | null;
   ci_low: number | null;
   ci_high: number | null;
+  mad: number | null;
+  check_in_count: number | null;
+  first_check_in_at: string | null;
+  last_check_in_at: string | null;
   updated_at: string;
 }
+
+export type BaselineDriftDirection = "deteriorating" | "recovering" | "stable";
 
 export interface BaselineDriftRow {
   id: string;
@@ -142,6 +160,8 @@ export interface BaselineDriftRow {
   trend_slope: number | null;
   deterioration_rate: number | null;
   recovery_velocity: number | null;
+  direction: BaselineDriftDirection | null;
+  max_drop: number | null;
   change_point_detected: boolean;
   created_at: string;
 }
