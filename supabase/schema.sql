@@ -188,6 +188,21 @@ create table if not exists public.frailty_assessments (
 -- completeness it didn't have, and likelihood compounded that into a fabricated
 -- probability. coefficient_contribution is the honest name for what's actually stored.
 alter table public.frailty_assessments add column if not exists coefficient_contribution numeric;
+
+-- Backfill from the old column before dropping it, so deployments that already
+-- ran the previous version of this migration don't lose their stored history.
+-- Guarded on the column still existing so re-running this file after the drop
+-- (below) has already happened is a no-op rather than an error.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'frailty_assessments' and column_name = 'log_odds'
+  ) then
+    update public.frailty_assessments set coefficient_contribution = log_odds where coefficient_contribution is null;
+  end if;
+end $$;
+
 alter table public.frailty_assessments drop column if exists log_odds;
 alter table public.frailty_assessments drop column if exists likelihood;
 

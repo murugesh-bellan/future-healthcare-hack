@@ -118,32 +118,40 @@ function frailtyCitation(): FrailtySummary["citation"] {
  * Loads the two clinical frailty axes (frailty_assessments) from the most
  * recent check-in that has them, plus their citation provenance.
  *
- * Sample fallback is only used for the "no real patient context" cases (no
- * session, no patient record) — the same demo-mode behavior as the rest of
- * this page. A signed-in patient who simply has no usable frailty data yet
- * (no check-ins, no assessments, or a query error) gets `frailty: null`
- * instead: this is a clinically-framed risk indicator, and showing a
- * fabricated percentage as if it were theirs would be actively misleading,
- * not just an illustrative placeholder.
+ * Sample data is used ONLY when Supabase itself isn't configured in this
+ * environment (supabaseServer() throws) — that's the sole case where there
+ * is structurally no live backend to query, i.e. a demo/preview deployment.
+ * Every other outcome — no session, an auth error, no patient record yet, a
+ * failed query, or genuinely no frailty data yet — returns `frailty: null`.
+ * This is a clinically-framed risk indicator: an auth hiccup or a transient
+ * database error for a real signed-in patient must never be misread as "no
+ * data, show the demo numbers instead" and surface a fabricated result.
  */
 export async function loadLatestFrailty(): Promise<{ frailty: FrailtySummary | null; source: DataSource }> {
   let supabase;
-  let patientId: string;
   try {
     supabase = await supabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error("Not signed in.");
-
-    const { data: patient } = await supabase.from("patients").select("id").eq("auth_user_id", user.id).maybeSingle();
-    if (!patient) throw new Error("No patient record yet.");
-    patientId = patient.id;
   } catch {
     return { frailty: mockData.frailty as FrailtySummary, source: "sample" };
   }
 
   try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    if (!user) return { frailty: null, source: "live" };
+
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    if (patientError) throw patientError;
+    if (!patient) return { frailty: null, source: "live" };
+    const patientId = patient.id;
+
     const { data: checkIns, error: checkInsError } = await supabase
       .from("check_ins")
       .select("id, created_at")
