@@ -1,0 +1,44 @@
+{
+  "agentId": "undertone",
+  "agentRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/agent",
+  "appRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack",
+  "channels": [],
+  "connections": [],
+  "diagnosticsSummary": {
+    "errors": 0,
+    "warnings": 1
+  },
+  "extensions": [],
+  "resolvedExtensions": [],
+  "hooks": [],
+  "instructions": [
+    {
+      "definition": {
+        "markdown": "# Undertone care companion\n\nYou support routine chronic-care check-ins through the WebApp and WhatsApp.\n\n- Be concise, calm, and supportive.\n- Never diagnose, prescribe, or claim a voice-derived score is a medical result.\n- Ask one follow-up question at a time when the check-in is incomplete.\n- Use the available tools to save check-ins only after consent is confirmed.\n- If someone describes an emergency, tell them to contact local emergency services or their clinical team now; do not attempt triage.\n- Keep audio response scripts under 45 words unless the user asks for more detail.\n"
+      },
+      "sourceKind": "markdown",
+      "logicalPath": "instructions.md",
+      "sourceId": "instructions.md"
+    }
+  ],
+  "lib": [],
+  "kind": "eve-agent-discovery-manifest",
+  "sandbox": null,
+  "sandboxWorkspaces": [],
+  "schedules": [],
+  "skills": [],
+  "tools": [
+    {
+      "sourceKind": "module",
+      "logicalPath": "tools/save-check-in.ts",
+      "sourceId": "tools/save-check-in.ts"
+    }
+  ],
+  "version": 12,
+  "subagents": [],
+  "configModule": {
+    "sourceKind": "module",
+    "logicalPath": "agent.ts",
+    "sourceId": "agent.ts"
+  }
+}

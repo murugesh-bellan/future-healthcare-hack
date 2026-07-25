@@ -1,0 +1,89 @@
+{
+  "agentRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0g1i9f-e2283bbd-ea7a-452b-9a85-fd3750916728/source/agent",
+  "appRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0g1i9f-e2283bbd-ea7a-452b-9a85-fd3750916728/source",
+  "channels": [],
+  "connections": [],
+  "config": {
+    "compaction": {},
+    "model": {
+      "id": "openai/gpt-5.4-mini",
+      "routing": {
+        "kind": "gateway",
+        "target": "openai"
+      },
+      "contextWindowTokens": 400000
+    },
+    "name": "undertone",
+    "source": {
+      "sourceKind": "module",
+      "logicalPath": "agent.ts",
+      "sourceId": "agent.ts"
+    }
+  },
+  "diagnosticsSummary": {
+    "errors": 0,
+    "warnings": 1
+  },
+  "disabledFrameworkTools": [],
+  "dynamicInstructions": [],
+  "dynamicSkills": [],
+  "dynamicTools": [],
+  "hooks": [],
+  "remoteAgents": [],
+  "sandbox": null,
+  "sandboxWorkspaces": [],
+  "schedules": [],
+  "skills": [],
+  "tools": [
+    {
+      "description": "Save a consented patient check-in. Do not call unless consent is confirmed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "patientId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "web",
+              "whatsapp"
+            ]
+          }
+        },
+        "required": [
+          "patientId",
+          "text",
+          "channel"
+        ]
+      },
+      "logicalPath": "tools/save-check-in.ts",
+      "name": "save-check-in",
+      "sourceId": "tools/save-check-in.ts",
+      "sourceKind": "module"
+    }
+  ],
+  "workspaceResourceRoot": {
+    "logicalPath": "workspace-resources/__root__",
+    "rootEntries": []
+  },
+  "instructions": {
+    "name": "instructions",
+    "logicalPath": "instructions.md",
+    "markdown": "# Undertone care companion\n\nYou support routine chronic-care check-ins through the WebApp and WhatsApp.\n\n- Be concise, calm, and supportive.\n- Never diagnose, prescribe, or claim a voice-derived score is a medical result.\n- Ask one follow-up question at a time when the check-in is incomplete.\n- Use the available tools to save check-ins only after consent is confirmed.\n- If someone describes an emergency, tell them to contact local emergency services or their clinical team now; do not attempt triage.\n- Keep audio response scripts under 45 words unless the user asks for more detail.\n",
+    "sourceId": "instructions.md",
+    "sourceKind": "markdown"
+  },
+  "kind": "eve-agent-compiled-manifest",
+  "extensionMounts": [],
+  "subagentEdges": [],
+  "subagents": [],
+  "version": 36
+}
