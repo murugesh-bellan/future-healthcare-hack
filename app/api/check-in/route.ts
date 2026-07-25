@@ -19,6 +19,7 @@ const voiceSignalsSchema = z
 const bodySchema = z.object({
   text: z.string().min(1).max(5000),
   voiceSignals: voiceSignalsSchema,
+  idempotencyKey: z.string().min(1).max(200).optional(),
 });
 
 /**
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       text: parsed.data.text,
       channel: "web",
       voiceSignals: parsed.data.voiceSignals,
+      idempotencyKey: parsed.data.idempotencyKey,
     });
     return Response.json({ ok: true, checkInId });
   } catch (err) {

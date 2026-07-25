@@ -48,6 +48,15 @@ export async function saveCheckIn(params: {
   text: string;
   channel: "web" | "whatsapp";
   voiceSignals?: VoiceSignalsInput | null;
+  /**
+   * Client-generated key, unique per check-in attempt. Web sends the same
+   * key to both this function (via the direct-save route) and the agent
+   * (which is instructed to pass it through if it calls save_check_in
+   * anyway) — a unique constraint on `check_ins.idempotency_key` means
+   * whichever insert loses that race hits a 23505 below instead of creating
+   * a second row. Prompt instructions alone can't guarantee that; this can.
+   */
+  idempotencyKey?: string | null;
 }): Promise<{ checkInId: string }> {
   const patientId = await resolvePatientId(params.principal);
   const supabase = requireSupabaseAdmin();
@@ -66,10 +75,25 @@ export async function saveCheckIn(params: {
       patient_id: patientId,
       transcript: params.text,
       channel: params.channel,
+      ...(params.idempotencyKey ? { idempotency_key: params.idempotencyKey } : {}),
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    if (error.code === "23505" && params.idempotencyKey) {
+      // Already saved by whichever caller won the race on this key — that
+      // insert already handled biomarkers, so just return its id.
+      const { data: existing, error: lookupError } = await supabase
+        .from("check_ins")
+        .select("id")
+        .eq("idempotency_key", params.idempotencyKey)
+        .single();
+      if (lookupError) throw new Error(lookupError.message);
+      return { checkInId: existing.id };
+    }
+    throw new Error(error.message);
+  }
 
   if (params.voiceSignals) {
     const rows = toAcousticBiomarkerRows(checkIn.id, params.voiceSignals);

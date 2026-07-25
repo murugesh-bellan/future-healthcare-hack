@@ -76,6 +76,11 @@ export default function CheckInPage() {
   // Chains sentence playback so clips play in order, one at a time, instead
   // of overlapping — each enqueue appends onto whatever's already pending.
   const audioQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // Identifies the current recording/reply cycle. Captured by enqueueSpeech
+  // at call time and checked before every side effect in speakSentence, so a
+  // new recording never plays or fetches audio left over from a previous one
+  // — resetFlow/startRecording bump this and abort anything still in flight.
+  const currentTurnRef = useRef({ id: 0, controller: new AbortController() });
 
   function clearAgentTimeout() {
     if (agentTimeoutRef.current) {
@@ -84,16 +89,32 @@ export default function CheckInPage() {
     }
   }
 
+  /** Stops whatever's playing/queued/in-flight and starts a fresh turn. */
+  function beginNewTurn() {
+    currentTurnRef.current.controller.abort();
+    currentTurnRef.current = { id: currentTurnRef.current.id + 1, controller: new AbortController() };
+    spokenUpToRef.current = "";
+    audioQueueRef.current = Promise.resolve();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute("src");
+    }
+  }
+
   /** Best-effort: a failed sentence never blocks the rest of the queue. */
-  async function speakSentence(sentence: string) {
+  async function speakSentence(sentence: string, turn: typeof currentTurnRef.current) {
+    if (turn.id !== currentTurnRef.current.id) return;
     try {
       const res = await fetch("/api/voice/speak", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: sentence }),
+        signal: turn.controller.signal,
       });
+      if (turn.id !== currentTurnRef.current.id) return;
       if (!res.ok || !audioRef.current) return;
       const audioBlob = await res.blob();
+      if (turn.id !== currentTurnRef.current.id) return;
       const url = URL.createObjectURL(audioBlob);
       const audio = audioRef.current;
       audio.src = url;
@@ -107,13 +128,15 @@ export default function CheckInPage() {
         void audio.play().catch(onEnded);
       });
     } catch {
-      // Voice playback is best-effort — the written reply is already shown.
+      // Voice playback is best-effort (and abort is expected on a new turn) —
+      // the written reply is already shown either way.
     }
   }
 
   /** Queues a sentence to speak after whatever's already playing finishes. */
   function enqueueSpeech(sentence: string) {
-    audioQueueRef.current = audioQueueRef.current.then(() => speakSentence(sentence));
+    const turn = currentTurnRef.current;
+    audioQueueRef.current = audioQueueRef.current.then(() => speakSentence(sentence, turn));
   }
 
   const agent = useEveAgent({
@@ -193,9 +216,7 @@ export default function CheckInPage() {
   }
 
   async function startRecording() {
-    // Fresh turn — nothing spoken yet, no stale playback queued.
-    spokenUpToRef.current = "";
-    audioQueueRef.current = Promise.resolve();
+    beginNewTurn();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -230,10 +251,12 @@ export default function CheckInPage() {
     try {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
 
-      // Decode + analyze runs concurrently with the transcribe network call —
-      // acoustic analysis is best-effort and must never add to the wait, so
-      // it's capped at SIGNALS_TIMEOUT_MS starting from right now (not from
-      // whenever we get around to awaiting it below).
+      // Runs concurrently with transcription — acoustic analysis is
+      // best-effort and must never add to the wait, so it's capped at
+      // SIGNALS_TIMEOUT_MS starting from right now. Its result feeds the
+      // save below, not the agent, so it must not delay agent.send either
+      // (that was the bug: awaiting this before agent.send could add up to
+      // the full timeout to first streamed text, on top of transcription).
       const signalsPromise = withTimeout(analyzeAudioBlob(blob), SIGNALS_TIMEOUT_MS, null);
 
       const formData = new FormData();
@@ -243,23 +266,35 @@ export default function CheckInPage() {
       if (!res.ok) throw new Error(body.error ?? "Transcription failed.");
       if (!body.text?.trim()) throw new Error("Didn't catch that — try again.");
 
-      const signals = await signalsPromise;
-      const voiceSignals = signals ? withSpeechRate(signals, body.text) : null;
+      // Same key sent to both the direct save below and the agent's
+      // clientContext — a unique constraint on check_ins.idempotency_key
+      // means that if the agent also calls save_check_in despite
+      // `already_saved` (see agent/instructions.md), that insert hits the
+      // constraint instead of creating a second row. Prompt instructions
+      // alone can't guarantee that; this can.
+      const idempotencyKey = crypto.randomUUID();
 
       // Save directly (fast, independent DB round trip) instead of routing
       // the write through the agent's tool-calling loop — that loop was the
       // biggest measured chunk of check-in latency (transcript received →
       // model decides to call a tool → tool executes → model resumes →
       // *then* generates a reply). The agent now only has to produce the
-      // reply, and never touches persistence for web.
-      savePromiseRef.current = fetch("/api/check-in", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: body.text,
-          ...(voiceSignals ? { voiceSignals } : {}),
-        }),
-      })
+      // reply, and never touches persistence for web. This waits on
+      // signalsPromise internally so *this* is delayed by slow analysis,
+      // never agent.send below.
+      savePromiseRef.current = signalsPromise
+        .then((signals) => {
+          const voiceSignals = signals ? withSpeechRate(signals, body.text) : null;
+          return fetch("/api/check-in", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              text: body.text,
+              idempotencyKey,
+              ...(voiceSignals ? { voiceSignals } : {}),
+            }),
+          });
+        })
         .then(async (res) => {
           if (res.ok) return { ok: true as const };
           const errBody = await res.json().catch(() => ({}));
@@ -278,12 +313,13 @@ export default function CheckInPage() {
         setPhase("error");
       }, AGENT_TURN_TIMEOUT_MS);
 
-      // `already_saved` tells the model not to call `save_check_in` itself —
-      // see agent/instructions.md. Without it, the agent would (correctly,
-      // per its own instructions) try to save this again, duplicating the row.
+      // Fires immediately after transcription — doesn't wait on signal
+      // analysis or the save above, both of which run independently.
+      // `already_saved` tells the model not to call `save_check_in` itself;
+      // `idempotency_key` is the real backstop if it does anyway.
       await agent.send({
         message: body.text,
-        clientContext: { already_saved: true },
+        clientContext: { already_saved: true, idempotency_key: idempotencyKey },
       });
     } catch (err) {
       clearAgentTimeout();
@@ -336,6 +372,7 @@ export default function CheckInPage() {
 
   function resetFlow() {
     clearAgentTimeout();
+    beginNewTurn();
     savePromiseRef.current = null;
     setPhase("ready");
     setStatusText("Tap to speak");
