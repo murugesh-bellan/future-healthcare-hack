@@ -171,6 +171,28 @@ create table if not exists public.functional_biomarkers (
 
 create index if not exists functional_biomarkers_check_in_id_idx on public.functional_biomarkers (check_in_id);
 
+-- Clinical frailty axes (JMIR 2024 logistic-regression study, citation EV001 in
+-- clinical_evidence.csv): each axis's own cited coefficient times its measured
+-- feature — see lib/scoring.ts's FrailtyAxisResult doc comment for why this is
+-- NOT a full model log-odds (no intercept/other covariates available), and why
+-- there is deliberately no derived likelihood/probability column.
+create table if not exists public.frailty_assessments (
+  id uuid primary key default gen_random_uuid(),
+  check_in_id uuid not null references public.check_ins(id) on delete cascade,
+  axis text not null check (axis in ('energy_based_frailty', 'sarcopenia_based_frailty')),
+  confidence numeric not null,
+  created_at timestamptz not null default now()
+);
+
+-- Renamed from the original log_odds/likelihood columns: log_odds overclaimed
+-- completeness it didn't have, and likelihood compounded that into a fabricated
+-- probability. coefficient_contribution is the honest name for what's actually stored.
+alter table public.frailty_assessments add column if not exists coefficient_contribution numeric;
+alter table public.frailty_assessments drop column if exists log_odds;
+alter table public.frailty_assessments drop column if exists likelihood;
+
+create index if not exists frailty_assessments_check_in_id_idx on public.frailty_assessments (check_in_id);
+
 -- ============================================================================
 -- Scoring & explainability
 -- ============================================================================
@@ -216,6 +238,13 @@ create table if not exists public.longitudinal_baselines (
   unique (patient_id, construct_name)
 );
 
+-- Mean absolute deviation (not variance/stddev — the .vada engine has no runtime sqrt) plus
+-- history bounds, matching strength_baseline's actual (Mean, MAD, Count, FirstTs, LastTs) output.
+alter table public.longitudinal_baselines add column if not exists mad numeric;
+alter table public.longitudinal_baselines add column if not exists check_in_count int;
+alter table public.longitudinal_baselines add column if not exists first_check_in_at timestamptz;
+alter table public.longitudinal_baselines add column if not exists last_check_in_at timestamptz;
+
 create table if not exists public.baseline_drifts (
   id uuid primary key default gen_random_uuid(),
   patient_id uuid not null references public.patients(id) on delete cascade,
@@ -227,6 +256,11 @@ create table if not exists public.baseline_drifts (
   change_point_detected boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- Categorical trend read (deteriorating/recovering/stable) and the largest single-step drop,
+-- matching strength_longitudinal's actual (Direction, MaxDrop) output.
+alter table public.baseline_drifts add column if not exists direction text;
+alter table public.baseline_drifts add column if not exists max_drop numeric;
 
 create index if not exists baseline_drifts_patient_construct_idx on public.baseline_drifts (patient_id, construct_name);
 
@@ -243,6 +277,7 @@ alter table public.acoustic_biomarkers enable row level security;
 alter table public.voice_constructs enable row level security;
 alter table public.physiological_constructs enable row level security;
 alter table public.functional_biomarkers enable row level security;
+alter table public.frailty_assessments enable row level security;
 alter table public.strength_scores enable row level security;
 alter table public.score_decompositions enable row level security;
 alter table public.longitudinal_baselines enable row level security;
@@ -319,6 +354,15 @@ using (exists (
   select 1 from public.check_ins
   join public.patients on patients.id = check_ins.patient_id
   where check_ins.id = functional_biomarkers.check_in_id and patients.auth_user_id = auth.uid()
+));
+
+drop policy if exists "Patients can read their own frailty assessments" on public.frailty_assessments;
+create policy "Patients can read their own frailty assessments"
+on public.frailty_assessments for select
+using (exists (
+  select 1 from public.check_ins
+  join public.patients on patients.id = check_ins.patient_id
+  where check_ins.id = frailty_assessments.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
 drop policy if exists "Patients can read their own strength scores" on public.strength_scores;

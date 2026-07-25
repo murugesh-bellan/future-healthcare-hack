@@ -147,7 +147,7 @@ export default function CheckInPage() {
       await agent.send({
         message: body.text,
         ...(voiceSignals
-          ? { clientContext: { voice_signals: { ...voiceSignals } as Record<string, number | null> } }
+          ? { clientContext: { voice_signals: { ...voiceSignals } as Record<string, number | string | null> } }
           : {}),
       });
     } catch (err) {
