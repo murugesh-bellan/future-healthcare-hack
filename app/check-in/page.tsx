@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useEveAgent } from "eve/react";
 import { TopBar } from "@/components/TopBar";
+import { analyzeVoiceSignals, withSpeechRate, type VoiceSignals } from "@/lib/voice-signals";
 
 type Phase = "loading" | "consent" | "ready" | "recording" | "processing" | "success" | "error";
 
@@ -115,16 +116,47 @@ export default function CheckInPage() {
   async function processRecording() {
     try {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+
+      // Decode + analyze runs concurrently with the transcribe network call —
+      // acoustic analysis is best-effort and must never add to the wait.
+      const signalsPromise = analyzeAudioBlob(blob);
+
       const formData = new FormData();
       formData.append("audio", blob, "check-in.webm");
       const res = await fetch("/api/voice/transcribe", { method: "POST", body: formData });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Transcription failed.");
       if (!body.text?.trim()) throw new Error("Didn't catch that — try again.");
-      await agent.send({ message: body.text });
+
+      const signals = await signalsPromise;
+      const voiceSignals = signals ? withSpeechRate(signals, body.text) : null;
+
+      await agent.send({
+        message: body.text,
+        ...(voiceSignals
+          ? { clientContext: { voice_signals: { ...voiceSignals } as Record<string, number | null> } }
+          : {}),
+      });
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : "Something went wrong.");
       setPhase("error");
+    }
+  }
+
+  /** Best-effort: a failed decode/analysis must never block the check-in. */
+  async function analyzeAudioBlob(blob: Blob): Promise<VoiceSignals | null> {
+    try {
+      const AudioContextClass =
+        window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const samples = audioBuffer.getChannelData(0);
+      const signals = analyzeVoiceSignals(samples, audioBuffer.sampleRate);
+      void audioContext.close();
+      return signals;
+    } catch {
+      return null;
     }
   }
 
