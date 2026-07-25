@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { TrendChart } from "@/components/TrendChart";
+import { BiomarkerSparkline } from "@/components/BiomarkerSparkline";
 import { DataSourceBadge } from "@/components/DataSourceBadge";
-import type { DataSource, TrendPoint } from "@/lib/types";
+import type { BiomarkerSeries, DataSource, TrendPoint } from "@/lib/types";
 import { percentChange, pointsInWindow, WINDOW_LABELS, type TrendWindow } from "@/lib/trend";
 
 const RANGES: { label: string; window: TrendWindow }[] = [
@@ -12,7 +13,20 @@ const RANGES: { label: string; window: TrendWindow }[] = [
   { label: "All time", window: 90 },
 ];
 
-export function TrendsView({ points, source }: { points: TrendPoint[]; source: DataSource }) {
+function formatValue(value: number, unit: string): string {
+  const decimals = unit === "Hz" || unit === "wpm" || unit === "s" ? 0 : unit === "ratio" ? 2 : 1;
+  return value.toFixed(decimals);
+}
+
+export function TrendsView({
+  points,
+  series,
+  source,
+}: {
+  points: TrendPoint[];
+  series: BiomarkerSeries[];
+  source: DataSource;
+}) {
   const [window, setWindow] = useState<TrendWindow>(30);
 
   const visible = pointsInWindow(points, window);
@@ -84,6 +98,26 @@ export function TrendsView({ points, source }: { points: TrendPoint[]; source: D
           </div>
         </div>
       </section>
+
+      {series.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <h3 className="text-headline-md text-on-surface">Voice Signals</h3>
+          <div className="grid grid-cols-2 gap-gutter">
+            {series.map((s) => (
+              <div key={s.featureName} className="flex flex-col gap-2 rounded-lg bg-surface-container p-5">
+                <span className="text-label-sm text-on-surface-variant">{s.label}</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-headline-md text-on-surface">
+                    {s.latestValue !== null ? formatValue(s.latestValue, s.unit) : "—"}
+                  </span>
+                  {s.unit && <span className="text-label-sm text-on-surface-variant">{s.unit}</span>}
+                </div>
+                <BiomarkerSparkline points={s.points} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-col items-center gap-3">
         <DataSourceBadge source={source} />

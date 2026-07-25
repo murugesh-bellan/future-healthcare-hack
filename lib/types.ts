@@ -7,6 +7,20 @@ export interface TrendPoint {
 
 export type DataSource = "live" | "sample";
 
+export interface BiomarkerPoint {
+  date: string; // ISO 8601 date, no time
+  value: number;
+}
+
+/** One acoustic_biomarkers feature's recent time series, for the Trends "Voice Signals" dashboard. */
+export interface BiomarkerSeries {
+  featureName: string;
+  label: string; // display name, e.g. "Pitch Stability"
+  unit: string;
+  latestValue: number | null;
+  points: BiomarkerPoint[];
+}
+
 export interface Citation {
   id: string;
   metricLabel: string; // e.g. "Muscle-Integrity Index"
