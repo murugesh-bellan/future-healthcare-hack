@@ -1,0 +1,260 @@
+{
+  "agentRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0md3w8-018fe884-4d3a-4a44-836a-b19759fb947f/source/agent",
+  "appRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0md3w8-018fe884-4d3a-4a44-836a-b19759fb947f/source",
+  "channels": [
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "GET",
+      "urlPath": "/eve/v1/info",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/reset",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/:sessionId",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/:sessionId/cancel",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "GET",
+      "urlPath": "/eve/v1/session/:sessionId/stream",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "whatsapp",
+      "logicalPath": "channels/whatsapp.ts",
+      "method": "GET",
+      "urlPath": "/eve/v1/whatsapp",
+      "sourceId": "channels/whatsapp.ts",
+      "sourceKind": "module",
+      "adapterKind": "chat-sdk"
+    },
+    {
+      "kind": "channel",
+      "name": "whatsapp",
+      "logicalPath": "channels/whatsapp.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/whatsapp",
+      "sourceId": "channels/whatsapp.ts",
+      "sourceKind": "module",
+      "adapterKind": "chat-sdk"
+    }
+  ],
+  "connections": [],
+  "config": {
+    "compaction": {},
+    "model": {
+      "id": "openai/gpt-5.4-mini",
+      "routing": {
+        "kind": "gateway",
+        "target": "openai"
+      },
+      "contextWindowTokens": 400000
+    },
+    "name": "undertone",
+    "source": {
+      "sourceKind": "module",
+      "logicalPath": "agent.ts",
+      "sourceId": "agent.ts"
+    }
+  },
+  "diagnosticsSummary": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "disabledFrameworkTools": [],
+  "dynamicInstructions": [],
+  "dynamicSkills": [],
+  "dynamicTools": [],
+  "hooks": [],
+  "remoteAgents": [],
+  "sandbox": null,
+  "sandboxWorkspaces": [],
+  "schedules": [],
+  "skills": [],
+  "tools": [
+    {
+      "description": "Record that the patient explicitly agreed to check-in tracking. Call once, the first time a patient consents, before ever calling save_check_in for them.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "logicalPath": "tools/confirm-consent.ts",
+      "name": "confirm-consent",
+      "sourceId": "tools/confirm-consent.ts",
+      "sourceKind": "module"
+    },
+    {
+      "description": "Save a consented patient check-in transcript. The patient's identity comes from the active session, not from input. Requires consent: call confirm_consent first if the patient has not consented yet. If the client context for this turn includes voice_signals, pass them through unchanged as voiceSignals.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "web",
+              "whatsapp"
+            ]
+          },
+          "voiceSignals": {
+            "type": "object",
+            "properties": {
+              "meanPitchHz": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pitchStdHz": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "jitterPercent": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "shimmerPercent": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "meanEnergyRms": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pauseRatio": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "speechRateWpm": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "durationSeconds": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "text",
+          "channel"
+        ]
+      },
+      "logicalPath": "tools/save-check-in.ts",
+      "name": "save-check-in",
+      "sourceId": "tools/save-check-in.ts",
+      "sourceKind": "module"
+    }
+  ],
+  "workspaceResourceRoot": {
+    "logicalPath": "workspace-resources/__root__",
+    "rootEntries": []
+  },
+  "instructions": {
+    "name": "instructions",
+    "logicalPath": "instructions.md",
+    "markdown": "# Undertone care companion\n\nYou support routine chronic-care check-ins through the WebApp and WhatsApp.\n\n- Be concise, calm, and supportive.\n- Never diagnose, prescribe, or claim a voice-derived score is a medical result.\n- Ask one follow-up question at a time when the check-in is incomplete.\n- Call `save_check_in` directly once the patient has shared something worth logging — don't ask for consent up front on the assumption this might be their first check-in. Consent is tracked server-side per patient, so most check-ins already have it on record.\n- If `save_check_in` fails because consent isn't confirmed yet, that's your signal this really is a first check-in: briefly explain that you log check-ins to track wellness trends, ask the patient to confirm they're okay with that, call `confirm_consent` once they agree in words, then retry `save_check_in`.\n- If someone describes an emergency, tell them to contact local emergency services or their clinical team now; do not attempt triage.\n- Keep audio response scripts under 45 words unless the user asks for more detail.\n",
+    "sourceId": "instructions.md",
+    "sourceKind": "markdown"
+  },
+  "kind": "eve-agent-compiled-manifest",
+  "extensionMounts": [],
+  "subagentEdges": [],
+  "subagents": [],
+  "version": 36
+}
