@@ -2,20 +2,25 @@
 // the picker in components/AnonAuthProvider.tsx. Run with:
 //   node scripts/seed-demo-patients.mjs
 //
-// Reads Supabase credentials from .env in the project root — not committed,
-// not part of the deployed app.
+// Reads Supabase credentials from .env and/or .env.local in the project root
+// (same precedence Next.js uses — .env.local overrides .env) — neither file
+// is committed or part of the deployed app.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const envPath = join(here, "..", ".env");
+const root = join(here, "..");
 
-for (const line of readFileSync(envPath, "utf8").split("\n")) {
-  const match = line.match(/^([A-Z_]+)=(.*)$/);
-  if (match) process.env[match[1]] = match[2];
+for (const filename of [".env", ".env.local"]) {
+  const path = join(root, filename);
+  if (!existsSync(path)) continue;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const match = line.match(/^([A-Z_]+)=(.*)$/);
+    if (match) process.env[match[1]] = match[2];
+  }
 }
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

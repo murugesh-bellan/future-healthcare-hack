@@ -22,22 +22,22 @@ Open `http://localhost:3000`. The health endpoint is available at `/api/health`.
 
 Before it works end to end you need:
 
-1. A Supabase project with **Anonymous sign-ins enabled** (Authentication → Sign In / Providers → Anonymous). The web app signs visitors in anonymously on first load so check-ins have a stable, RLS-scoped owner without a login screen.
-2. `supabase/schema.sql` applied to that project.
-3. The env vars in `.env.example` filled in (Supabase URL/anon key/service role key, `AI_GATEWAY_API_KEY`, ElevenLabs key + voice id).
+1. `supabase/schema.sql` applied to a Supabase project.
+2. The env vars in `.env.example` filled in (Supabase URL/anon key/service role key, `AI_GATEWAY_API_KEY`, ElevenLabs key + voice id), copied into `.env.local`.
+3. Pick your own `DEMO_ACCESS_CODE` and two `DEMO_PATIENT_{A,B}_{EMAIL,PASSWORD}` pairs, then run `node scripts/seed-demo-patients.mjs` to create (or rotate) those two Supabase accounts. The web app gates on a fixed two-persona picker (`components/AnonAuthProvider.tsx` → `/api/demo-login`) rather than open anonymous sign-in — see "How identity and consent work" below.
 
 ## Structure
 
 - `app/` — WebApp pages (home, check-in, trends, coaching, evidence, how-it-works) and API routes
 - `agent/` — Eve agent, typed tools (`save_check_in`, `confirm_consent`), and the eve/WhatsApp channels
 - `lib/` — Supabase clients (browser, server, admin), ElevenLabs, and patient resolution
-- `components/` — shared TopBar/BottomNav and the anonymous-auth bootstrap
+- `components/` — shared TopBar/BottomNav and the demo-persona auth bootstrap
 - `design/` — source design mockups the pages were built from
 - `supabase/schema.sql` — data model and row-level security
 
 ## How identity and consent work
 
-- The browser signs in anonymously via Supabase on first load (`components/AnonAuthProvider.tsx`); the session lives in cookies so both the browser and server see the same user.
+- The web app is currently gated behind two fixed demo personas rather than open anonymous sign-in: `components/AnonAuthProvider.tsx` shows a picker behind a shared `DEMO_ACCESS_CODE`, and `/api/demo-login` performs the actual `signInWithPassword` server-side (credentials in `lib/demo-personas.ts`, sourced from env vars — never sent to the browser). The resulting session lives in cookies so both the browser and server see the same user, same as anonymous sign-in did before.
 - `agent/channels/eve.ts` verifies that Supabase session on every eve request and attaches it as the caller's principal — the model never receives or chooses a patient id.
 - `lib/patients.ts` resolves (and lazily creates) the `patients` row for that principal: by `auth_user_id` for web/Supabase callers, by `whatsapp_user_id` for WhatsApp callers.
 - The `confirm_consent` and `save_check_in` tools both derive the patient from `ctx.session.auth.current` — `save_check_in` refuses to write until consent is on record. The check-in page shows an explicit consent step before the mic is enabled; WhatsApp gets consent conversationally per `agent/instructions.md`.
