@@ -13,6 +13,7 @@ const voiceSignalsSchema = z
     pauseRatio: z.number().nullable().optional(),
     speechRateWpm: z.number().nullable().optional(),
     durationSeconds: z.number().nullable().optional(),
+    voicedSegmentDurationSeconds: z.number().nullable().optional(),
   })
   .optional();
 
@@ -26,7 +27,8 @@ function toAcousticBiomarkerRows(checkInId: string, voiceSignals: NonNullable<z.
     { feature_name: "Loudness", raw_value: voiceSignals.meanEnergyRms ?? null, units: "rms" },
     { feature_name: "PauseRatio", raw_value: voiceSignals.pauseRatio ?? null, units: "ratio" },
     { feature_name: "SpeechRate", raw_value: voiceSignals.speechRateWpm ?? null, units: "wpm" },
-    { feature_name: "VoicedSegmentDuration", raw_value: voiceSignals.durationSeconds ?? null, units: "s" },
+    { feature_name: "RecordingDuration", raw_value: voiceSignals.durationSeconds ?? null, units: "s" },
+    { feature_name: "VoicedSegmentDuration", raw_value: voiceSignals.voicedSegmentDurationSeconds ?? null, units: "s" },
   ];
   return features
     .filter((f) => f.raw_value !== null)

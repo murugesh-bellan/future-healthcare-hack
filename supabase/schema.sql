@@ -1,5 +1,13 @@
 -- ============================================================================
 -- Speakers (patients) & medication catalogue
+--
+-- This file is a running migration, not a fresh-install-only snapshot: it is
+-- meant to be re-applied against a database that already has the original
+-- patients/check_ins/voice_signals tables from an earlier version of this
+-- schema. Existing tables are widened with `alter table ... add column if
+-- not exists` rather than redefined via `create table if not exists` (which
+-- is a no-op — and therefore silently adds nothing — once the table already
+-- exists). Policies are dropped and recreated so re-running this file is safe.
 -- ============================================================================
 
 create table if not exists public.patients (
@@ -7,13 +15,14 @@ create table if not exists public.patients (
   auth_user_id uuid unique references auth.users(id) on delete cascade,
   whatsapp_user_id text unique,
   consented_at timestamptz,
-  age int,
-  sex text,
-  height_cm numeric,
-  enrolled_date date,
-  cohort text,
   created_at timestamptz not null default now()
 );
+
+alter table public.patients add column if not exists age int;
+alter table public.patients add column if not exists sex text;
+alter table public.patients add column if not exists height_cm numeric;
+alter table public.patients add column if not exists enrolled_date date;
+alter table public.patients add column if not exists cohort text;
 
 create table if not exists public.medications (
   id uuid primary key default gen_random_uuid(),
@@ -45,12 +54,13 @@ create table if not exists public.check_ins (
   channel text not null check (channel in ('web', 'whatsapp')),
   transcript text not null,
   raw_audio_path text,
-  task_type text,
-  sample_rate_hz int,
-  device text,
-  duration_s numeric,
   created_at timestamptz not null default now()
 );
+
+alter table public.check_ins add column if not exists task_type text;
+alter table public.check_ins add column if not exists sample_rate_hz int;
+alter table public.check_ins add column if not exists device text;
+alter table public.check_ins add column if not exists duration_s numeric;
 
 -- Capture conditions affecting feature validity. One row per recording.
 create table if not exists public.recording_contexts (
@@ -83,6 +93,37 @@ create table if not exists public.acoustic_biomarkers (
 
 create index if not exists acoustic_biomarkers_check_in_id_idx on public.acoustic_biomarkers (check_in_id);
 create index if not exists acoustic_biomarkers_feature_name_idx on public.acoustic_biomarkers (feature_name);
+
+-- One-time transition from the old flat voice_signals table (superseded by
+-- the acoustic_biomarkers EAV layer above): unpivot each row into one
+-- acoustic_biomarkers row per non-null feature, then drop voice_signals.
+-- Guarded so this is a no-op on every subsequent re-run of this file.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'voice_signals'
+  ) then
+    insert into public.acoustic_biomarkers (check_in_id, feature_name, raw_value, units)
+    select check_in_id, 'F0', mean_pitch_hz, 'Hz' from public.voice_signals where mean_pitch_hz is not null
+    union all
+    select check_in_id, 'F0_std', pitch_std_hz, 'Hz' from public.voice_signals where pitch_std_hz is not null
+    union all
+    select check_in_id, 'Jitter', jitter_percent, '%' from public.voice_signals where jitter_percent is not null
+    union all
+    select check_in_id, 'Shimmer', shimmer_percent, '%' from public.voice_signals where shimmer_percent is not null
+    union all
+    select check_in_id, 'Loudness', mean_energy_rms, 'rms' from public.voice_signals where mean_energy_rms is not null
+    union all
+    select check_in_id, 'PauseRatio', pause_ratio, 'ratio' from public.voice_signals where pause_ratio is not null
+    union all
+    select check_in_id, 'SpeechRate', speech_rate_wpm, 'wpm' from public.voice_signals where speech_rate_wpm is not null
+    union all
+    select check_in_id, 'RecordingDuration', duration_seconds, 's' from public.voice_signals where duration_seconds is not null;
+
+    drop table public.voice_signals cascade;
+  end if;
+end $$;
 
 -- ============================================================================
 -- Construct layer — respiratory / voice-quality / motor subtypes share an
@@ -207,16 +248,19 @@ alter table public.score_decompositions enable row level security;
 alter table public.longitudinal_baselines enable row level security;
 alter table public.baseline_drifts enable row level security;
 
+drop policy if exists "Patients can read their own profile" on public.patients;
 create policy "Patients can read their own profile"
 on public.patients for select
 using (auth.uid() = auth_user_id);
 
 -- Medications are a shared, non-PII catalogue: any signed-in user can read it.
+drop policy if exists "Authenticated users can read the medication catalogue" on public.medications;
 create policy "Authenticated users can read the medication catalogue"
 on public.medications for select
 to authenticated
 using (true);
 
+drop policy if exists "Patients can read their own therapies" on public.glp1_therapies;
 create policy "Patients can read their own therapies"
 on public.glp1_therapies for select
 using (exists (
@@ -224,6 +268,7 @@ using (exists (
   where patients.id = glp1_therapies.patient_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own check-ins" on public.check_ins;
 create policy "Patients can read their own check-ins"
 on public.check_ins for select
 using (exists (
@@ -231,6 +276,7 @@ using (exists (
   where patients.id = check_ins.patient_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own recording contexts" on public.recording_contexts;
 create policy "Patients can read their own recording contexts"
 on public.recording_contexts for select
 using (exists (
@@ -239,6 +285,7 @@ using (exists (
   where check_ins.id = recording_contexts.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own acoustic biomarkers" on public.acoustic_biomarkers;
 create policy "Patients can read their own acoustic biomarkers"
 on public.acoustic_biomarkers for select
 using (exists (
@@ -247,6 +294,7 @@ using (exists (
   where check_ins.id = acoustic_biomarkers.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own voice constructs" on public.voice_constructs;
 create policy "Patients can read their own voice constructs"
 on public.voice_constructs for select
 using (exists (
@@ -255,6 +303,7 @@ using (exists (
   where check_ins.id = voice_constructs.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own physiological constructs" on public.physiological_constructs;
 create policy "Patients can read their own physiological constructs"
 on public.physiological_constructs for select
 using (exists (
@@ -263,6 +312,7 @@ using (exists (
   where check_ins.id = physiological_constructs.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own functional biomarkers" on public.functional_biomarkers;
 create policy "Patients can read their own functional biomarkers"
 on public.functional_biomarkers for select
 using (exists (
@@ -271,6 +321,7 @@ using (exists (
   where check_ins.id = functional_biomarkers.check_in_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own strength scores" on public.strength_scores;
 create policy "Patients can read their own strength scores"
 on public.strength_scores for select
 using (exists (
@@ -278,6 +329,7 @@ using (exists (
   where patients.id = strength_scores.patient_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own score decompositions" on public.score_decompositions;
 create policy "Patients can read their own score decompositions"
 on public.score_decompositions for select
 using (exists (
@@ -286,6 +338,7 @@ using (exists (
   where strength_scores.id = score_decompositions.score_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own longitudinal baselines" on public.longitudinal_baselines;
 create policy "Patients can read their own longitudinal baselines"
 on public.longitudinal_baselines for select
 using (exists (
@@ -293,6 +346,7 @@ using (exists (
   where patients.id = longitudinal_baselines.patient_id and patients.auth_user_id = auth.uid()
 ));
 
+drop policy if exists "Patients can read their own baseline drift" on public.baseline_drifts;
 create policy "Patients can read their own baseline drift"
 on public.baseline_drifts for select
 using (exists (
