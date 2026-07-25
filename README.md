@@ -36,4 +36,3 @@ This project is a prototype. The agent must not diagnose or make treatment decis
 Configure a WhatsApp Business app and point its webhook at the Eve-generated WhatsApp route after deployment. Add the WhatsApp and provider values from `.env.example` as Vercel environment variables. The WhatsApp adapter requires an access token, phone number ID, app secret, and a verify token.
 
 Until those credentials exist, the channel is staged at `agent/integrations/whatsapp-channel.ts` so the WebApp can run locally. When the credentials are ready, move it to `agent/channels/whatsapp.ts`; Eve will then expose the WhatsApp channel. The current channel uses in-memory thread state for local development; change it to a durable Chat SDK state adapter before production.
-
