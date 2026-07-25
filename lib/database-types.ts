@@ -19,3 +19,17 @@ export interface CheckInRow {
   raw_audio_path: string | null;
   created_at: string;
 }
+
+export interface VoiceSignalRow {
+  id: string;
+  check_in_id: string;
+  mean_pitch_hz: number | null;
+  pitch_std_hz: number | null;
+  jitter_percent: number | null;
+  shimmer_percent: number | null;
+  mean_energy_rms: number | null;
+  pause_ratio: number | null;
+  speech_rate_wpm: number | null;
+  duration_seconds: number | null;
+  created_at: string;
+}
