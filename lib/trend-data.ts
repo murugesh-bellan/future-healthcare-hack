@@ -60,7 +60,7 @@ export async function loadTrend(): Promise<{ points: TrendPoint[]; source: DataS
         rollingDay.setDate(rollingDay.getDate() - offset);
         rollingCount += countsByDay.get(dayKey(rollingDay)) ?? 0;
       }
-      return { date: dayKey(d), score: scoreForCount(rollingCount) };
+      return { date: dayKey(d), score: scoreForCount(rollingCount), checkInCount: countsByDay.get(dayKey(d)) ?? 0 };
     });
 
     return { points, source: "live" };

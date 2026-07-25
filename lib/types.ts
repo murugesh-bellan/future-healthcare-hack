@@ -1,6 +1,8 @@
 export interface TrendPoint {
   date: string; // ISO 8601 date, no time
-  score: number; // 0-100
+  score: number; // 0-100 — illustrative Strength Score, not a validated biometric
+  /** Check-ins logged on this calendar day (for Trends "Check-ins logged"). */
+  checkInCount: number;
 }
 
 export type DataSource = "live" | "sample";
