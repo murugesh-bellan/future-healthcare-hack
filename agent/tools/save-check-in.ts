@@ -2,6 +2,8 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { requireSupabaseAdmin } from "@/lib/supabase-admin";
 import { resolvePatientId } from "@/lib/patients";
+import { computePhysiologicalConstructs } from "@/lib/physiological-constructs";
+import type { VoiceSignals } from "@/lib/voice-signals";
 
 const voiceSignalsSchema = z
   .object({
@@ -14,16 +16,39 @@ const voiceSignalsSchema = z
     speechRateWpm: z.number().nullable().optional(),
     durationSeconds: z.number().nullable().optional(),
     voicedSegmentDurationSeconds: z.number().nullable().optional(),
+    hnrDb: z.number().nullable().optional(),
+    alphaRatioDb: z.number().nullable().optional(),
   })
   .optional();
 
+type VoiceSignalsInput = NonNullable<z.infer<typeof voiceSignalsSchema>>;
+
+/** Fills in whatever the client didn't send (older clients, or a signal that failed to extract) as null. */
+function toVoiceSignals(input: VoiceSignalsInput): VoiceSignals {
+  return {
+    meanPitchHz: input.meanPitchHz ?? null,
+    pitchStdHz: input.pitchStdHz ?? null,
+    jitterPercent: input.jitterPercent ?? null,
+    shimmerPercent: input.shimmerPercent ?? null,
+    meanEnergyRms: input.meanEnergyRms ?? 0,
+    pauseRatio: input.pauseRatio ?? 0,
+    durationSeconds: input.durationSeconds ?? 0,
+    voicedSegmentDurationSeconds: input.voicedSegmentDurationSeconds ?? 0,
+    speechRateWpm: input.speechRateWpm ?? null,
+    hnrDb: input.hnrDb ?? null,
+    alphaRatioDb: input.alphaRatioDb ?? null,
+  };
+}
+
 /** Maps the client-side VoiceSignals shape onto acoustic_biomarkers feature rows (one row per feature). */
-function toAcousticBiomarkerRows(checkInId: string, voiceSignals: NonNullable<z.infer<typeof voiceSignalsSchema>>) {
+function toAcousticBiomarkerRows(checkInId: string, voiceSignals: VoiceSignalsInput) {
   const features: { feature_name: string; raw_value: number | null; units: string | null }[] = [
     { feature_name: "F0", raw_value: voiceSignals.meanPitchHz ?? null, units: "Hz" },
     { feature_name: "F0_std", raw_value: voiceSignals.pitchStdHz ?? null, units: "Hz" },
     { feature_name: "Jitter", raw_value: voiceSignals.jitterPercent ?? null, units: "%" },
     { feature_name: "Shimmer", raw_value: voiceSignals.shimmerPercent ?? null, units: "%" },
+    { feature_name: "HNR", raw_value: voiceSignals.hnrDb ?? null, units: "dB" },
+    { feature_name: "AlphaRatio", raw_value: voiceSignals.alphaRatioDb ?? null, units: "dB" },
     { feature_name: "Loudness", raw_value: voiceSignals.meanEnergyRms ?? null, units: "rms" },
     { feature_name: "PauseRatio", raw_value: voiceSignals.pauseRatio ?? null, units: "ratio" },
     { feature_name: "SpeechRate", raw_value: voiceSignals.speechRateWpm ?? null, units: "wpm" },
@@ -78,8 +103,22 @@ export default defineTool({
         // Voice signals are supplementary telemetry — don't fail the check-in over it.
         if (signalsError) console.error("Failed to save acoustic biomarkers:", signalsError.message);
       }
+
+      // Physiological constructs (Vocal Stability, Phonation Efficiency, ...) mirror
+      // the same feature -> construct mapping proven in the Prometheux ontology —
+      // see lib/physiological-constructs.ts for the formula behind each one.
+      const constructs = computePhysiologicalConstructs(toVoiceSignals(voiceSignals));
+      const constructRows = constructs.map((c) => ({
+        check_in_id: checkIn.id,
+        name: c.name,
+        value: c.value,
+        formula: c.formula,
+        confidence: c.confidence,
+      }));
+      const { error: constructError } = await supabase.from("physiological_constructs").insert(constructRows);
+      if (constructError) console.error("Failed to save physiological constructs:", constructError.message);
     }
 
-    return { saved: true };
+    return { saved: true, checkInId: checkIn.id };
   },
 });
