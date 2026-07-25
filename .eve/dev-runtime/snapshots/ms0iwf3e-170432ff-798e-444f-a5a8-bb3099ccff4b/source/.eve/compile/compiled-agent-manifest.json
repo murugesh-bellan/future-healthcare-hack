@@ -1,0 +1,155 @@
+{
+  "agentRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0iwf3e-170432ff-798e-444f-a5a8-bb3099ccff4b/source/agent",
+  "appRoot": "/Users/mb/Documents/workspace/hackspace/future_healthcare_hack/code-v1/future-healthcare-hack/.eve/dev-runtime/snapshots/ms0iwf3e-170432ff-798e-444f-a5a8-bb3099ccff4b/source",
+  "channels": [
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "GET",
+      "urlPath": "/eve/v1/info",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/reset",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/:sessionId",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "POST",
+      "urlPath": "/eve/v1/session/:sessionId/cancel",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    },
+    {
+      "kind": "channel",
+      "name": "eve",
+      "logicalPath": "channels/eve.ts",
+      "method": "GET",
+      "urlPath": "/eve/v1/session/:sessionId/stream",
+      "sourceId": "channels/eve.ts",
+      "sourceKind": "module",
+      "adapterKind": "http"
+    }
+  ],
+  "connections": [],
+  "config": {
+    "compaction": {},
+    "model": {
+      "id": "openai/gpt-5.4-mini",
+      "routing": {
+        "kind": "gateway",
+        "target": "openai"
+      },
+      "contextWindowTokens": 400000
+    },
+    "name": "undertone",
+    "source": {
+      "sourceKind": "module",
+      "logicalPath": "agent.ts",
+      "sourceId": "agent.ts"
+    }
+  },
+  "diagnosticsSummary": {
+    "errors": 0,
+    "warnings": 1
+  },
+  "disabledFrameworkTools": [],
+  "dynamicInstructions": [],
+  "dynamicSkills": [],
+  "dynamicTools": [],
+  "hooks": [],
+  "remoteAgents": [],
+  "sandbox": null,
+  "sandboxWorkspaces": [],
+  "schedules": [],
+  "skills": [],
+  "tools": [
+    {
+      "description": "Record that the patient explicitly agreed to check-in tracking. Call once, the first time a patient consents, before ever calling save_check_in for them.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "logicalPath": "tools/confirm-consent.ts",
+      "name": "confirm-consent",
+      "sourceId": "tools/confirm-consent.ts",
+      "sourceKind": "module"
+    },
+    {
+      "description": "Save a consented patient check-in transcript. The patient's identity comes from the active session, not from input. Requires consent: call confirm_consent first if the patient has not consented yet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "web",
+              "whatsapp"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "channel"
+        ]
+      },
+      "logicalPath": "tools/save-check-in.ts",
+      "name": "save-check-in",
+      "sourceId": "tools/save-check-in.ts",
+      "sourceKind": "module"
+    }
+  ],
+  "workspaceResourceRoot": {
+    "logicalPath": "workspace-resources/__root__",
+    "rootEntries": []
+  },
+  "instructions": {
+    "name": "instructions",
+    "logicalPath": "instructions.md",
+    "markdown": "# Undertone care companion\n\nYou support routine chronic-care check-ins through the WebApp and WhatsApp.\n\n- Be concise, calm, and supportive.\n- Never diagnose, prescribe, or claim a voice-derived score is a medical result.\n- Ask one follow-up question at a time when the check-in is incomplete.\n- Use the available tools to save check-ins only after consent is confirmed.\n- If someone describes an emergency, tell them to contact local emergency services or their clinical team now; do not attempt triage.\n- Keep audio response scripts under 45 words unless the user asks for more detail.\n",
+    "sourceId": "instructions.md",
+    "sourceKind": "markdown"
+  },
+  "kind": "eve-agent-compiled-manifest",
+  "extensionMounts": [],
+  "subagentEdges": [],
+  "subagents": [],
+  "version": 36
+}

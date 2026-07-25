@@ -1,0 +1,263 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Undertone - Evidence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed": "#001d32",
+                    "primary": "#b8dad7",
+                    "tertiary-fixed-dim": "#ebbcae",
+                    "on-tertiary-fixed": "#2e140c",
+                    "inverse-primary": "#456462",
+                    "inverse-on-surface": "#313030",
+                    "surface-container-low": "#1c1b1b",
+                    "on-secondary-fixed-variant": "#004a75",
+                    "surface-bright": "#393939",
+                    "secondary": "#96ccff",
+                    "outline-variant": "#414847",
+                    "surface-container": "#20201f",
+                    "background": "#131313",
+                    "surface-variant": "#353535",
+                    "outline": "#8b9291",
+                    "on-tertiary-fixed-variant": "#603f34",
+                    "surface-container-highest": "#353535",
+                    "secondary-fixed": "#cee5ff",
+                    "tertiary-container": "#dbad9f",
+                    "surface-container-high": "#2a2a2a",
+                    "on-secondary": "#003353",
+                    "primary-fixed": "#c7e9e6",
+                    "on-error": "#690005",
+                    "surface-dim": "#131313",
+                    "tertiary": "#f9c8ba",
+                    "secondary-fixed-dim": "#96ccff",
+                    "error-container": "#93000a",
+                    "on-background": "#e5e2e1",
+                    "on-secondary-container": "#8ec8fe",
+                    "error": "#ffb4ab",
+                    "surface": "#131313",
+                    "on-surface": "#e5e2e1",
+                    "on-primary-container": "#2f4e4c",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-fixed": "#00201e",
+                    "inverse-surface": "#e5e2e1",
+                    "on-primary": "#163534",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-tertiary-container": "#614035",
+                    "on-primary-fixed-variant": "#2d4c4a",
+                    "tertiary-fixed": "#ffdbd0",
+                    "primary-container": "#9dbebb",
+                    "on-tertiary": "#46291f",
+                    "surface-tint": "#accdca",
+                    "secondary-container": "#025483",
+                    "primary-fixed-dim": "#accdca",
+                    "on-surface-variant": "#c1c8c6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "section-gap": "48px",
+                    "stack-sm": "8px",
+                    "stack-md": "16px",
+                    "stack-lg": "32px",
+                    "container-margin": "24px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Lexend"],
+                    "label-md": ["Lexend"],
+                    "headline-xl-mobile": ["Lexend"],
+                    "headline-xl": ["Lexend"],
+                    "body-lg": ["Lexend"],
+                    "label-sm": ["Lexend"],
+                    "headline-md": ["Lexend"],
+                    "headline-lg": ["Lexend"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "headline-xl-mobile": ["32px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "headline-xl": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.03em", "fontWeight": "600"}],
+                    "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+                    "headline-lg": ["28px", {"lineHeight": "34px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Lexend', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .citation-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .accordion-content {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.3s ease-out, padding 0.3s ease-out;
+            overflow: hidden;
+        }
+        .accordion-open .accordion-content {
+            grid-template-rows: 1fr;
+            padding-top: 16px;
+        }
+        .accordion-open .chevron-icon {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body class="bg-background">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-lg flex items-center justify-between px-container-margin h-16 w-full">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional close-up portrait of a woman with a kind expression, softly lit with warm amber tones against a dark minimalist background, conveying a sense of calm and clinical expertise in a high-end wellness environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB51ZNnUa43G-qddpWK5aGpS2B3hX7GQHRJ7XnIyXVHN-KWyWLM5Q-fB3p0O9od4Y9tuR1aUJjflqlA4nuWadDXuwaake1EKvX1yPdp-fh5ip10RNhCdQ0dBI-pvrbwmL2poFgHPyfQUFZs_t8Dsq3NjU9yNXZqduMh2hR1ZrImUgiGKj0cr-i3rlSf_cwQAwl3I5LLHWw-UjqG7bz-grWEwDtUtilKhzPZL4_l2chlB88v7lUANi_LdrSSJ-gRE3G3Qa7fTcFenCfT">
+</div>
+<span class="font-headline-lg text-headline-lg-mobile md:text-headline-lg font-bold text-primary">Undertone</span>
+</div>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<!-- Content Canvas -->
+<main class="pt-24 pb-32 px-container-margin max-w-2xl mx-auto min-h-screen">
+<!-- Science Header -->
+<section class="mb-stack-lg">
+<h1 class="font-headline-md text-headline-md-mobile md:text-headline-md text-on-surface mb-2">The science behind your score</h1>
+<div class="w-12 h-1 bg-primary rounded-full"></div>
+</section>
+<!-- Evidence List -->
+<section class="space-y-stack-md">
+<!-- HRV Card (Expanded State) -->
+<div class="citation-card accordion-open bg-surface-container-low rounded-lg p-stack-md cursor-pointer" onclick="this.classList.toggle('accordion-open')">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<span class="text-label-sm font-label-sm tracking-wider text-primary uppercase">Heart Rate Variability (HRV)</span>
+<p class="text-body-md font-body-md text-on-surface">Reflects autonomic nervous system balance and recovery capacity.</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant chevron-icon transition-transform">expand_more</span>
+</div>
+<div class="accordion-content">
+<div class="min-h-0 space-y-4">
+<div class="p-4 bg-primary/5 rounded-lg border-l-2 border-primary">
+<p class="text-label-md font-label-md text-primary italic">"Further analysis suggests HRV trends are a leading indicator of systemic fatigue prior to perceived exertion."</p>
+</div>
+<div class="flex flex-col gap-1 opacity-70">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Citation: "HRV as a marker of physiological stress"</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Journal of Applied Physiology, 2021 | n=1,240</span>
+</div>
+</div>
+</div>
+</div>
+<div class="h-[1px] bg-outline-variant/30 mx-2"></div>
+<!-- Vocal Biomarkers Card -->
+<div class="citation-card bg-transparent hover:bg-surface-container-lowest transition-colors rounded-lg p-stack-md cursor-pointer" onclick="this.classList.toggle('accordion-open')">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<span class="text-label-sm font-label-sm tracking-wider text-primary uppercase">Vocal Biomarkers</span>
+<p class="text-body-md font-body-md text-on-surface">Subtle changes in vocal prosody can correlate with metabolic energy levels.</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant chevron-icon transition-transform">expand_more</span>
+</div>
+<div class="accordion-content">
+<div class="min-h-0 space-y-4">
+<p class="text-body-md font-body-md text-on-surface-variant">Vocal analysis detects micro-fluctuations in frequency and rhythm that are often imperceptible to the human ear but highly indicative of metabolic strain.</p>
+<div class="flex flex-col gap-1 opacity-70">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Citation: "Acoustic features of speech in metabolic monitoring"</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Digital Health, 2022 | n=450</span>
+</div>
+</div>
+</div>
+</div>
+<div class="h-[1px] bg-outline-variant/30 mx-2"></div>
+<!-- Grip Strength Card -->
+<div class="citation-card bg-transparent hover:bg-surface-container-lowest transition-colors rounded-lg p-stack-md cursor-pointer" onclick="this.classList.toggle('accordion-open')">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<span class="text-label-sm font-label-sm tracking-wider text-primary uppercase">Grip Strength</span>
+<p class="text-body-md font-body-md text-on-surface">A validated proxy for overall skeletal muscle vitality during weight loss.</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant chevron-icon transition-transform">expand_more</span>
+</div>
+<div class="accordion-content">
+<div class="min-h-0 space-y-4">
+<p class="text-body-md font-body-md text-on-surface-variant">Consistent grip strength measurements ensure that weight loss is primarily coming from fat mass rather than functional muscle tissue.</p>
+<div class="flex flex-col gap-1 opacity-70">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Citation: "Muscle mass and strength during GLP-1 therapy"</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">The Lancet Healthy Longevity, 2023 | n=890</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Disclaimer Block -->
+<section class="mt-section-gap pt-stack-lg border-t border-outline-variant/20">
+<div class="bg-surface-container-high/30 p-6 rounded-lg">
+<h2 class="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest mb-3">What this isn't</h2>
+<p class="text-body-md font-body-md text-on-surface-variant/80 leading-relaxed">
+                    Undertone is a wellness tool, not a medical device. The Strength Score is for informational purposes only and does not diagnose, treat, or prevent any medical condition. Always consult your care team.
+                </p>
+</div>
+</section>
+<!-- Atmospheric Visual -->
+<div class="mt-stack-lg h-48 relative rounded-lg overflow-hidden">
+
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-surface-container shadow-[0_-4px_40px_rgba(0,0,0,0.3)] rounded-t-lg">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 transition-all duration-200 active:scale-90 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 transition-all duration-200 active:scale-90 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-label-sm text-label-sm mt-1">Trends</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 transition-all duration-200 active:scale-90 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">mic</span>
+<span class="font-label-sm text-label-sm mt-1">Check-in</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 transition-all duration-200 active:scale-90 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined">lightbulb</span>
+<span class="font-label-sm text-label-sm mt-1">Coaching</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-sm text-label-sm">Evidence</span>
+</a>
+</nav>
+<script>
+        // Simple micro-interaction for the cards
+        document.querySelectorAll('.citation-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Potential logic to close others if needed
+                // For now, toggle is handled by onclick in HTML for brevity
+            });
+        });
+
+        // Atmospheric shader background (pseudo-script for the webgl tag)
+        // The webgl-shader custom element handles the actual rendering of {{DATA:ANIMATION:ANIMATION_1}}
+    </script>
+</body></html>
