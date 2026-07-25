@@ -60,29 +60,32 @@ export async function loadBiomarkers(): Promise<{ series: BiomarkerSeries[]; sou
     const rows = (checkIns ?? []) as Pick<CheckInRow, "id" | "created_at">[];
     if (rows.length === 0) throw new Error("No recordings in range.");
 
-    const dateByCheckIn = new Map(rows.map((r) => [r.id, r.created_at.slice(0, 10)]));
+    const checkInById = new Map(rows.map((r) => [r.id, r]));
     const { data: biomarkers, error: biomarkersError } = await supabase
       .from("acoustic_biomarkers")
       .select("check_in_id, feature_name, raw_value, units")
       .in("check_in_id", rows.map((r) => r.id));
     if (biomarkersError) throw biomarkersError;
 
-    const byFeature = new Map<string, { unit: string | null; points: BiomarkerPoint[] }>();
+    // Postgres does not guarantee row order for `.in(...)`, so each point carries
+    // its check-in's created_at for sorting below rather than relying on query order.
+    const byFeature = new Map<string, { unit: string | null; points: (BiomarkerPoint & { createdAt: string })[] }>();
     for (const row of (biomarkers ?? []) as Pick<
       AcousticBiomarkerRow,
       "check_in_id" | "feature_name" | "raw_value" | "units"
     >[]) {
       if (row.raw_value === null) continue;
-      const date = dateByCheckIn.get(row.check_in_id);
-      if (!date) continue;
+      const checkIn = checkInById.get(row.check_in_id);
+      if (!checkIn) continue;
       const entry = byFeature.get(row.feature_name) ?? { unit: row.units, points: [] };
-      entry.points.push({ date, value: row.raw_value });
+      entry.points.push({ date: checkIn.created_at.slice(0, 10), value: row.raw_value, createdAt: checkIn.created_at });
       byFeature.set(row.feature_name, entry);
     }
 
     const series: BiomarkerSeries[] = FEATURE_ORDER.filter((name) => byFeature.has(name)).map((name) => {
       const entry = byFeature.get(name)!;
-      const points = entry.points.slice(-MAX_POINTS_PER_FEATURE);
+      const sorted = [...entry.points].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const points = sorted.slice(-MAX_POINTS_PER_FEATURE).map(({ date, value }) => ({ date, value }));
       return {
         featureName: name,
         label: FEATURE_LABELS[name] ?? name,
