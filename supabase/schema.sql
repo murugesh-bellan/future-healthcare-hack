@@ -61,6 +61,10 @@ alter table public.check_ins add column if not exists task_type text;
 alter table public.check_ins add column if not exists sample_rate_hz int;
 alter table public.check_ins add column if not exists device text;
 alter table public.check_ins add column if not exists duration_s numeric;
+-- Lets the web direct-save path and the agent's save_check_in tool race on
+-- the same client-generated key without producing two rows: whichever insert
+-- loses the race hits this constraint, and the caller treats that as success.
+alter table public.check_ins add column if not exists idempotency_key text unique;
 
 -- Capture conditions affecting feature validity. One row per recording.
 create table if not exists public.recording_contexts (
