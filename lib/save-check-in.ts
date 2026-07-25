@@ -278,14 +278,37 @@ export async function saveCheckIn(params: {
 
   if (error) {
     if (error.code === "23505" && params.idempotencyKey) {
-      // Already saved by whichever caller won the race on this key — that
-      // insert already handled biomarkers and scoring, so just return its id.
+      // Already saved by whichever caller won the race on this key. The two
+      // racing callers are NOT equivalent, though: only the web direct-save
+      // route ever receives real voiceSignals — the agent's clientContext
+      // carries only already_saved/idempotency_key, so if the agent's tool
+      // call wins the row (it has no analysis delay, unlike the direct-save
+      // fetch, which waits on client-side signal analysis first), the
+      // winning insert has no signals to score at all. If *this* losing call
+      // is the one carrying real signals, they must still be scored against
+      // the row that won — otherwise they're discarded permanently, not just
+      // delayed. Guarded on acoustic_biomarkers not already existing for that
+      // check-in, so a genuine duplicate direct-save request (e.g. a client
+      // retry) doesn't double-score the same data.
       const { data: existing, error: lookupError } = await supabase
         .from("check_ins")
         .select("id")
         .eq("idempotency_key", params.idempotencyKey)
         .single();
       if (lookupError) throw new Error(lookupError.message);
+
+      if (params.voiceSignals) {
+        const { data: alreadyScored } = await supabase
+          .from("acoustic_biomarkers")
+          .select("id")
+          .eq("check_in_id", existing.id)
+          .limit(1)
+          .maybeSingle();
+        if (!alreadyScored) {
+          await scoreAndPersist(supabase, existing.id, patientId, params.voiceSignals);
+        }
+      }
+
       return { checkInId: existing.id };
     }
     throw new Error(error.message);
