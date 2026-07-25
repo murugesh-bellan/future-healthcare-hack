@@ -8,8 +8,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid request." }, { status: 400 });
 
   try {
-    const audio = await createVoiceReply(parsed.data.text);
-    return new Response(audio, { headers: { "content-type": "audio/mpeg" } });
+    const upstream = await createVoiceReply(parsed.data.text);
+    // Forward the stream as it arrives instead of buffering the whole clip
+    // here first — see lib/voice.ts for why.
+    return new Response(upstream.body, { headers: { "content-type": "audio/mpeg" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Speech synthesis failed.";
     return Response.json({ error: message }, { status: 502 });

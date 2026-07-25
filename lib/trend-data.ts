@@ -77,12 +77,93 @@ function scoreFromAcousticBiomarkers(signals: SignalFeatures[]): number {
 }
 
 /**
+ * Pure: derives the 90-day rolling Strength Score trend from already-fetched
+ * check-ins and acoustic biomarkers. Factored out of `loadTrend` so
+ * `lib/dashboard-data.ts` can reuse it against a single shared fetch instead
+ * of each caller re-querying Supabase independently.
+ */
+export function deriveTrendPoints(
+  checkIns: Pick<CheckInRow, "id" | "created_at">[],
+  biomarkers: Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value">[],
+  windowDays: number = WINDOW_DAYS,
+  rollingDays: number = ROLLING_DAYS,
+): TrendPoint[] {
+  const signalsByCheckIn = new Map<string, SignalFeatures>();
+  for (const row of biomarkers) {
+    const field = FEATURE_FIELD[row.feature_name];
+    if (!field || row.raw_value === null) continue;
+    const entry = signalsByCheckIn.get(row.check_in_id) ?? {
+      jitterPercent: null,
+      shimmerPercent: null,
+      pauseRatio: null,
+      pitchStdHz: null,
+      speechRateWpm: null,
+    };
+    entry[field] = row.raw_value;
+    signalsByCheckIn.set(row.check_in_id, entry);
+  }
+
+  const countsByDay = new Map<string, number>();
+  const signalsByDay = new Map<string, SignalFeatures[]>();
+  for (const row of checkIns) {
+    const key = row.created_at.slice(0, 10);
+    countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
+    const signal = signalsByCheckIn.get(row.id);
+    if (signal) {
+      const list = signalsByDay.get(key) ?? [];
+      list.push(signal);
+      signalsByDay.set(key, list);
+    }
+  }
+
+  const today = new Date();
+  return Array.from({ length: windowDays }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (windowDays - 1 - i));
+    const key = dayKey(d);
+
+    let rollingCount = 0;
+    const rollingSignals: SignalFeatures[] = [];
+    for (let offset = 0; offset < rollingDays; offset++) {
+      const rollingDay = new Date(d);
+      rollingDay.setDate(rollingDay.getDate() - offset);
+      const day = dayKey(rollingDay);
+      rollingCount += countsByDay.get(day) ?? 0;
+      const daySignals = signalsByDay.get(day);
+      if (daySignals) rollingSignals.push(...daySignals);
+    }
+
+    let score: number;
+    if (rollingSignals.length > 0) {
+      // Blend the biomarker heuristic with a light frequency nudge so consistency still matters.
+      const biomarkerScore = scoreFromAcousticBiomarkers(rollingSignals);
+      const frequency = scoreForCount(rollingCount);
+      score = Math.round(biomarkerScore * 0.85 + frequency * 0.15);
+    } else if (rollingCount > 0) {
+      score = scoreForCount(rollingCount);
+    } else {
+      score = 50; // neutral baseline — no check-ins in the trailing week
+    }
+
+    return {
+      date: key,
+      score: Math.max(0, Math.min(100, score)),
+      checkInCount: countsByDay.get(key) ?? 0,
+    };
+  });
+}
+
+/**
  * Loads the signed-in patient's daily trend for the last 90 days.
  * Strength Score prefers stored `acoustic_biomarkers` (illustrative heuristic);
  * falls back to check-in frequency when a day's rolling window has no usable
  * biomarkers, and to bundled sample data (reported in `source`) when there's
  * no session, no patient, or the query fails — so the UI never has to handle
  * a hard error mid-demo.
+ *
+ * Standalone entry point (used by the home page). `/trends` uses
+ * `loadTrendsPageData` in `lib/dashboard-data.ts` instead, which shares one
+ * fetch between this and `loadBiomarkers` rather than each querying separately.
  */
 export async function loadTrend(): Promise<{ points: TrendPoint[]; source: DataSource }> {
   try {
@@ -109,80 +190,18 @@ export async function loadTrend(): Promise<{ points: TrendPoint[]; source: DataS
     const checkIns = (data ?? []) as Pick<CheckInRow, "id" | "created_at">[];
     const checkInIds = checkIns.map((row) => row.id);
 
-    const signalsByCheckIn = new Map<string, SignalFeatures>();
+    let biomarkers: Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value">[] = [];
     if (checkInIds.length > 0) {
-      const { data: biomarkers, error: biomarkersError } = await supabase
+      const { data: biomarkerRows, error: biomarkersError } = await supabase
         .from("acoustic_biomarkers")
         .select("check_in_id, feature_name, raw_value")
         .in("check_in_id", checkInIds)
         .in("feature_name", Object.keys(FEATURE_FIELD));
       if (biomarkersError) throw biomarkersError;
-
-      for (const row of (biomarkers ?? []) as Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value">[]) {
-        const field = FEATURE_FIELD[row.feature_name];
-        if (!field || row.raw_value === null) continue;
-        const entry = signalsByCheckIn.get(row.check_in_id) ?? {
-          jitterPercent: null,
-          shimmerPercent: null,
-          pauseRatio: null,
-          pitchStdHz: null,
-          speechRateWpm: null,
-        };
-        entry[field] = row.raw_value;
-        signalsByCheckIn.set(row.check_in_id, entry);
-      }
+      biomarkers = (biomarkerRows ?? []) as Pick<AcousticBiomarkerRow, "check_in_id" | "feature_name" | "raw_value">[];
     }
 
-    const countsByDay = new Map<string, number>();
-    const signalsByDay = new Map<string, SignalFeatures[]>();
-    for (const row of checkIns) {
-      const key = row.created_at.slice(0, 10);
-      countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
-      const signal = signalsByCheckIn.get(row.id);
-      if (signal) {
-        const list = signalsByDay.get(key) ?? [];
-        list.push(signal);
-        signalsByDay.set(key, list);
-      }
-    }
-
-    const today = new Date();
-    const points: TrendPoint[] = Array.from({ length: WINDOW_DAYS }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() - (WINDOW_DAYS - 1 - i));
-      const key = dayKey(d);
-
-      let rollingCount = 0;
-      const rollingSignals: SignalFeatures[] = [];
-      for (let offset = 0; offset < ROLLING_DAYS; offset++) {
-        const rollingDay = new Date(d);
-        rollingDay.setDate(rollingDay.getDate() - offset);
-        const day = dayKey(rollingDay);
-        rollingCount += countsByDay.get(day) ?? 0;
-        const daySignals = signalsByDay.get(day);
-        if (daySignals) rollingSignals.push(...daySignals);
-      }
-
-      let score: number;
-      if (rollingSignals.length > 0) {
-        // Blend the biomarker heuristic with a light frequency nudge so consistency still matters.
-        const biomarkerScore = scoreFromAcousticBiomarkers(rollingSignals);
-        const frequency = scoreForCount(rollingCount);
-        score = Math.round(biomarkerScore * 0.85 + frequency * 0.15);
-      } else if (rollingCount > 0) {
-        score = scoreForCount(rollingCount);
-      } else {
-        score = 50; // neutral baseline — no check-ins in the trailing week
-      }
-
-      return {
-        date: key,
-        score: Math.max(0, Math.min(100, score)),
-        checkInCount: countsByDay.get(key) ?? 0,
-      };
-    });
-
-    return { points, source: "live" };
+    return { points: deriveTrendPoints(checkIns, biomarkers), source: "live" };
   } catch {
     return { points: mockData.trend.points as TrendPoint[], source: "sample" };
   }
