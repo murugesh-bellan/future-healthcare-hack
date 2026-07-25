@@ -10,6 +10,9 @@ type Phase = "loading" | "consent" | "ready" | "recording" | "processing" | "suc
 const DEFAULT_REPLY = "Logged. Thanks for checking in.";
 const MAX_RECORDING_MS = 20_000;
 const SIGNALS_TIMEOUT_MS = 1500;
+// A turn can hang server-side (stuck tool call, stalled model call) with no
+// error ever reaching the client — without this, "processing" is a dead end.
+const AGENT_TURN_TIMEOUT_MS = 25_000;
 
 /**
  * Caps how long we'll wait on `promise` before falling back — timer starts
@@ -33,6 +36,25 @@ function extractAssistantText(messages: readonly { role: string; parts: readonly
   );
 }
 
+/**
+ * Finds complete sentences (ending in ./!/?) within `text`, so streaming text
+ * can be spoken sentence-by-sentence instead of waiting for the whole reply.
+ * Returns how much of `text` those sentences consumed, so the caller can
+ * track what's already been dispatched to TTS.
+ */
+function splitCompleteSentences(text: string): { sentences: string[]; consumedLength: number } {
+  const sentences: string[] = [];
+  let consumedLength = 0;
+  const pattern = /[^.!?]*[.!?]+(\s+|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const sentence = match[0].trim();
+    if (sentence) sentences.push(sentence);
+    consumedLength = match.index + match[0].length;
+  }
+  return { sentences, consumedLength };
+}
+
 export default function CheckInPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [statusText, setStatusText] = useState("Tap to speak");
@@ -43,21 +65,88 @@ export default function CheckInPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const agentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks the direct-save request kicked off alongside the agent's turn —
+  // awaited in handleAgentReply so we never show "Logged!" for a save that
+  // actually failed, regardless of which one finishes first.
+  const savePromiseRef = useRef<Promise<{ ok: boolean; error?: string }> | null>(null);
+  // How much of the streamed reply has already been dispatched to TTS, so we
+  // only speak each sentence once as more text streams in.
+  const spokenUpToRef = useRef("");
+  // Chains sentence playback so clips play in order, one at a time, instead
+  // of overlapping — each enqueue appends onto whatever's already pending.
+  const audioQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  function clearAgentTimeout() {
+    if (agentTimeoutRef.current) {
+      clearTimeout(agentTimeoutRef.current);
+      agentTimeoutRef.current = null;
+    }
+  }
+
+  /** Best-effort: a failed sentence never blocks the rest of the queue. */
+  async function speakSentence(sentence: string) {
+    try {
+      const res = await fetch("/api/voice/speak", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: sentence }),
+      });
+      if (!res.ok || !audioRef.current) return;
+      const audioBlob = await res.blob();
+      const url = URL.createObjectURL(audioBlob);
+      const audio = audioRef.current;
+      audio.src = url;
+      await new Promise<void>((resolve) => {
+        const onEnded = () => {
+          audio.removeEventListener("ended", onEnded);
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        audio.addEventListener("ended", onEnded);
+        void audio.play().catch(onEnded);
+      });
+    } catch {
+      // Voice playback is best-effort — the written reply is already shown.
+    }
+  }
+
+  /** Queues a sentence to speak after whatever's already playing finishes. */
+  function enqueueSpeech(sentence: string) {
+    audioQueueRef.current = audioQueueRef.current.then(() => speakSentence(sentence));
+  }
 
   const agent = useEveAgent({
     onFinish: (snapshot) => {
+      clearAgentTimeout();
       const text = extractAssistantText(snapshot.data.messages);
       void handleAgentReply(text || DEFAULT_REPLY);
     },
     onError: (err) => {
+      clearAgentTimeout();
       setErrorText(err.message);
       setPhase("error");
     },
   });
 
+  // Belt-and-braces: clear any pending timeout if the page unmounts mid-turn.
+  useEffect(() => clearAgentTimeout, []);
+
   // Live-updating reply text as the model streams it — the whole point is to
   // stop showing a static "Processing…" for the entire turn.
   const liveReplyText = agent.status === "streaming" ? extractAssistantText(agent.data.messages) : "";
+
+  // Speak each sentence as soon as it completes, instead of waiting for the
+  // full reply — playback starts while the model is still generating the rest.
+  useEffect(() => {
+    if (!liveReplyText) return;
+    const newPortion = liveReplyText.slice(spokenUpToRef.current.length);
+    const { sentences, consumedLength } = splitCompleteSentences(newPortion);
+    if (sentences.length === 0) return;
+    spokenUpToRef.current = liveReplyText.slice(0, spokenUpToRef.current.length + consumedLength);
+    for (const sentence of sentences) enqueueSpeech(sentence);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveReplyText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +193,9 @@ export default function CheckInPage() {
   }
 
   async function startRecording() {
+    // Fresh turn — nothing spoken yet, no stale playback queued.
+    spokenUpToRef.current = "";
+    audioQueueRef.current = Promise.resolve();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -154,13 +246,47 @@ export default function CheckInPage() {
       const signals = await signalsPromise;
       const voiceSignals = signals ? withSpeechRate(signals, body.text) : null;
 
+      // Save directly (fast, independent DB round trip) instead of routing
+      // the write through the agent's tool-calling loop — that loop was the
+      // biggest measured chunk of check-in latency (transcript received →
+      // model decides to call a tool → tool executes → model resumes →
+      // *then* generates a reply). The agent now only has to produce the
+      // reply, and never touches persistence for web.
+      savePromiseRef.current = fetch("/api/check-in", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          text: body.text,
+          ...(voiceSignals ? { voiceSignals } : {}),
+        }),
+      })
+        .then(async (res) => {
+          if (res.ok) return { ok: true as const };
+          const errBody = await res.json().catch(() => ({}));
+          return { ok: false as const, error: errBody.error ?? "Could not save your check-in." };
+        })
+        .catch(() => ({ ok: false as const, error: "Could not save your check-in." }));
+
+      // `agent.send` resolving only means the turn started, not that it
+      // finished — `onFinish` is the real completion signal. Guard against a
+      // turn that hangs server-side (stuck tool call, stalled model call)
+      // with no error ever reaching the client.
+      clearAgentTimeout();
+      agentTimeoutRef.current = setTimeout(() => {
+        agent.stop();
+        setErrorText("That's taking longer than expected. Please try again.");
+        setPhase("error");
+      }, AGENT_TURN_TIMEOUT_MS);
+
+      // `already_saved` tells the model not to call `save_check_in` itself —
+      // see agent/instructions.md. Without it, the agent would (correctly,
+      // per its own instructions) try to save this again, duplicating the row.
       await agent.send({
         message: body.text,
-        ...(voiceSignals
-          ? { clientContext: { voice_signals: { ...voiceSignals } as Record<string, number | null> } }
-          : {}),
+        clientContext: { already_saved: true },
       });
     } catch (err) {
+      clearAgentTimeout();
       setErrorText(err instanceof Error ? err.message : "Something went wrong.");
       setPhase("error");
     }
@@ -187,25 +313,30 @@ export default function CheckInPage() {
   }
 
   async function handleAgentReply(text: string) {
+    const saveResult = savePromiseRef.current ? await savePromiseRef.current : { ok: true as const };
+    if (!saveResult.ok) {
+      setErrorText(saveResult.error ?? "Could not save your check-in. Please try again.");
+      setPhase("error");
+      return;
+    }
+
     setReplyText(text);
     setPhase("success");
-    try {
-      const res = await fetch("/api/voice/speak", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok && audioRef.current) {
-        const audioBlob = await res.blob();
-        audioRef.current.src = URL.createObjectURL(audioBlob);
-        void audioRef.current.play();
-      }
-    } catch {
-      // Voice playback is best-effort — the written reply is already shown.
+
+    // Speak whatever's left after the sentences already queued during
+    // streaming — covers a trailing fragment with no terminal punctuation,
+    // or the whole reply if nothing was spoken yet (e.g. onFinish fired
+    // before any complete sentence had streamed in).
+    const remaining = text.slice(spokenUpToRef.current.length).trim();
+    if (remaining) {
+      spokenUpToRef.current = text;
+      enqueueSpeech(remaining);
     }
   }
 
   function resetFlow() {
+    clearAgentTimeout();
+    savePromiseRef.current = null;
     setPhase("ready");
     setStatusText("Tap to speak");
     setReplyText("");
