@@ -14,7 +14,6 @@ export default function CheckInPage() {
   const [statusText, setStatusText] = useState("Tap to speak");
   const [replyText, setReplyText] = useState("");
   const [errorText, setErrorText] = useState("");
-  const [typedNote, setTypedNote] = useState("");
   const [barHeights, setBarHeights] = useState([16, 32, 48, 24, 40]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -99,7 +98,7 @@ export default function CheckInPage() {
       setPhase("recording");
       setStatusText("Listening… tap to finish");
     } catch {
-      setErrorText("Microphone access is required for voice check-ins. Try typing instead.");
+      setErrorText("Microphone access is required for voice check-ins.");
       setPhase("error");
     }
   }
@@ -123,19 +122,6 @@ export default function CheckInPage() {
       if (!res.ok) throw new Error(body.error ?? "Transcription failed.");
       if (!body.text?.trim()) throw new Error("Didn't catch that — try again.");
       await agent.send({ message: body.text });
-    } catch (err) {
-      setErrorText(err instanceof Error ? err.message : "Something went wrong.");
-      setPhase("error");
-    }
-  }
-
-  async function sendTypedNote() {
-    if (!typedNote.trim()) return;
-    setPhase("processing");
-    setStatusText("Processing...");
-    try {
-      await agent.send({ message: typedNote.trim() });
-      setTypedNote("");
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : "Something went wrong.");
       setPhase("error");
@@ -235,26 +221,6 @@ export default function CheckInPage() {
               </button>
               <p className="text-label-md tracking-wide text-on-surface-variant">{statusText}</p>
             </div>
-
-            <details className="w-full max-w-xs text-left">
-              <summary className="cursor-pointer text-label-sm text-on-surface-variant">Prefer to type?</summary>
-              <div className="mt-stack-sm flex flex-col gap-stack-sm">
-                <textarea
-                  value={typedNote}
-                  onChange={(event) => setTypedNote(event.target.value)}
-                  placeholder="Type how you're feeling…"
-                  className="w-full rounded-md border border-outline-variant/30 bg-surface-container-low p-3 text-body-md text-on-surface"
-                  rows={3}
-                />
-                <button
-                  onClick={sendTypedNote}
-                  disabled={phase === "processing" || !typedNote.trim()}
-                  className="rounded-full bg-secondary-container px-4 py-2 text-label-md text-on-secondary-container disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-            </details>
           </section>
         ) : null}
 
