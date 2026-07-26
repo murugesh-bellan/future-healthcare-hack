@@ -68,9 +68,12 @@ export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Could not sign in.");
-      // Full reload so the browser client (and this provider) picks up the
-      // session cookie the server just set, rather than trying to sync it in-place.
-      window.location.reload();
+      // Full navigation (not just a reload) so the browser client picks up the
+      // session cookie the server just set. The clinician account has no
+      // patients row, so the patient-facing home page it would otherwise land
+      // on falls back to sample data — indistinguishable from a patient with
+      // no history yet. Route straight to the cohort view instead.
+      window.location.href = personaId === "clinician" ? "/clinician" : window.location.pathname;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
       setStatus("error");
