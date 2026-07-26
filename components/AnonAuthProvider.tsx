@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase";
+import { supabaseBrowser, isSupabaseConfigured } from "@/lib/supabase";
 
 /**
  * Public-safe persona metadata only — id and label, nothing that grants
@@ -22,19 +22,28 @@ type Status = "checking" | "picking" | "signing-in" | "ready" | "error";
 /**
  * Gates the app on a Supabase session before rendering, so RLS-scoped
  * reads/writes and the Eve channel's session auth always have a stable user
- * id. Instead of anonymous sign-in, this presents a picker between two fixed
+ * id. Instead of anonymous sign-in, this presents a picker between fixed
  * demo personas — appropriate while this is a demo/testing build, not yet
  * open to real anonymous visitors. Sign-in happens server-side (see
  * app/api/demo-login) behind a shared access code, so the demo credentials
  * never reach the browser and the endpoint isn't a public "become any demo
  * patient" route.
+ *
+ * When Supabase isn't configured at all (no live credentials yet), this
+ * skips the gate entirely and renders the app directly — every screen
+ * already falls back to real-Prometheux-derived sample data on its own
+ * (see lib/trend-data.ts), so the app stays fully walkable with zero
+ * backend. Without this, supabaseBrowser() throwing synchronously here
+ * would have blocked every single screen, not just the ones that need
+ * a live session.
  */
 export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<Status>("checking");
+  const [status, setStatus] = useState<Status>(isSupabaseConfigured() ? "checking" : "ready");
   const [error, setError] = useState<string | null>(null);
   const [accessCode, setAccessCode] = useState("");
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) return;
     let cancelled = false;
     supabaseBrowser()
       .auth.getSession()
