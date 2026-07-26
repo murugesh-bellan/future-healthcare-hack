@@ -170,29 +170,39 @@ export interface Escalation {
   triggeredAtCheckin: string;
   triggeredDate: string;
   scoreAtTrigger: number;
-  priorScore: number;
-  drop: number;
+  firstScore: number;
+  firstDate: string;
+  weeksObserved: number;
 }
 
-/** Finds the real single-step drop that crossed the danger threshold, per patient — not authored. */
+/**
+ * Triggers on a SUSTAINED downward trend crossing the danger threshold —
+ * not a single-step drop. Sarcopenia/GLP-1 lean-mass loss is a gradual,
+ * cumulative process (weeks of reduced anabolic stimulus compounding), so
+ * the clinically appropriate signal is Prometheux's own `direction:
+ * deteriorating` classification, not an acute single-recording crash. A
+ * one-step cliff is what you'd expect from an acute illness or a bad
+ * recording, not muscle loss — using it as the trigger here would have
+ * been scientifically wrong, not just an unlucky-looking demo.
+ */
 export function computeEscalations(): Escalation[] {
   const escalations: Escalation[] = [];
   for (const patient of PROMETHEUX_PATIENTS) {
-    for (let i = 1; i < patient.history.length; i++) {
-      const prior = patient.history[i - 1];
-      const current = patient.history[i];
-      const drop = current.score - prior.score;
-      if (current.score < ESCALATION_SCORE_THRESHOLD && drop <= ESCALATION_DROP_THRESHOLD) {
-        escalations.push({
-          patient,
-          triggeredAtCheckin: current.checkinId,
-          triggeredDate: current.date,
-          scoreAtTrigger: current.score,
-          priorScore: prior.score,
-          drop,
-        });
-        break; // one escalation per patient — the first crossing, not every subsequent low point
-      }
+    const latest = patient.history[patient.history.length - 1];
+    const first = patient.history[0];
+    if (patient.direction === "deteriorating" && latest.score < ESCALATION_SCORE_THRESHOLD) {
+      const weeksObserved = Math.round(
+        (new Date(latest.date).getTime() - new Date(first.date).getTime()) / (7 * 24 * 60 * 60 * 1000),
+      );
+      escalations.push({
+        patient,
+        triggeredAtCheckin: latest.checkinId,
+        triggeredDate: latest.date,
+        scoreAtTrigger: latest.score,
+        firstScore: first.score,
+        firstDate: first.date,
+        weeksObserved,
+      });
     }
   }
   return escalations;

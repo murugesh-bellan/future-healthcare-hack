@@ -3,17 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Escalation } from "@/lib/prometheux-patients";
-import { ESCALATION_SCORE_THRESHOLD, ESCALATION_DROP_THRESHOLD } from "@/lib/prometheux-patients";
+import { ESCALATION_SCORE_THRESHOLD } from "@/lib/prometheux-patients";
 
 /**
  * Matches the reasoning-trace card design: the rule, the real numbers that
  * fired it, and a human decision point. Approve/Dismiss update local state
  * only — no backend write exists for this yet, and that's disclosed rather
  * than faked as a persisted action.
+ *
+ * The rule is trend-based (sustained decline over weeks), not a single-step
+ * drop — sarcopenia/GLP-1 lean-mass loss is gradual and cumulative, so a
+ * one-recording crash would be the wrong clinical signal to escalate on.
  */
 export function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [status, setStatus] = useState<"open" | "approved" | "dismissed">("open");
-  const { patient, triggeredAtCheckin, triggeredDate, scoreAtTrigger, priorScore, drop } = escalation;
+  const { patient, triggeredAtCheckin, triggeredDate, scoreAtTrigger, firstScore, firstDate, weeksObserved } =
+    escalation;
+  const totalDrop = firstScore - scoreAtTrigger;
 
   return (
     <div className="rounded-lg border border-error/30 bg-surface-container-lowest p-container-margin shadow-lg">
@@ -34,17 +40,21 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
           </p>
           <pre className="overflow-x-auto rounded-md bg-surface-container-high/60 p-3 text-[11px] leading-relaxed text-on-surface-variant">
 {`RULE strength_score_escalation:
-  IF   strength_score(latest) < ${ESCALATION_SCORE_THRESHOLD}
+  IF   direction(patient) = deteriorating
+       → sustained over ${weeksObserved} weeks ✓
+  AND  strength_score(latest) < ${ESCALATION_SCORE_THRESHOLD}
        → ${scoreAtTrigger.toFixed(1)} ✓
-  AND  single_step_drop <= ${ESCALATION_DROP_THRESHOLD}
-       → ${drop.toFixed(1)} (from ${priorScore.toFixed(1)}) ✓
   THEN escalate(priority: high)
 
+trend:
+  • ${firstDate} → ${firstScore.toFixed(1)}
+  • ${triggeredDate} → ${scoreAtTrigger.toFixed(1)}
+  • ${totalDrop.toFixed(1)} pts over ${weeksObserved} weeks
+    (gradual, not a single-recording drop)
+
 evidence:
-  • functional_capacity fell sharply
-    in the same check-in
   • sarcopenia-based frailty axis
-    rising (JMIR 2024)`}
+    trending with the decline (JMIR 2024)`}
           </pre>
         </div>
 
