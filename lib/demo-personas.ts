@@ -3,7 +3,7 @@
 // Credentials live in env vars (not committed) — see scripts/seed-demo-patients.mjs,
 // which creates/rotates these accounts from the same source.
 
-export type DemoPersonaId = "sp01" | "sp02" | "sp03" | "sp04";
+export type DemoPersonaId = "sp01" | "sp02" | "sp03" | "sp04" | "clinician";
 
 export interface DemoPersona {
   id: DemoPersonaId;
@@ -31,6 +31,12 @@ export function getDemoPersonas(): readonly DemoPersona[] {
     { id: "sp02", label: "Speaker 02", email: requireEnv("DEMO_PATIENT_SP02_EMAIL"), password: requireEnv("DEMO_PATIENT_SP02_PASSWORD") },
     { id: "sp03", label: "Speaker 03", email: requireEnv("DEMO_PATIENT_SP03_EMAIL"), password: requireEnv("DEMO_PATIENT_SP03_PASSWORD") },
     { id: "sp04", label: "Speaker 04", email: requireEnv("DEMO_PATIENT_SP04_EMAIL"), password: requireEnv("DEMO_PATIENT_SP04_PASSWORD") },
+    // Staff account, not a speaker/patient — signing in as this identity does not
+    // create a patients row. Whether it can reach /clinician is decided
+    // separately, by membership in public.clinicians (see lib/clinician-auth.ts),
+    // not by knowing this password. The access code below is just the shared
+    // demo-login gate, same as for every patient persona.
+    { id: "clinician", label: "Clinician (staff)", email: requireEnv("DEMO_CLINICIAN_EMAIL"), password: requireEnv("DEMO_CLINICIAN_PASSWORD") },
   ];
 }
 

@@ -1,5 +1,6 @@
-// One-time (idempotent) seed script for the two fixed demo personas used by
-// the picker in components/AnonAuthProvider.tsx. Run with:
+// One-time (idempotent) seed script for the fixed demo identities used by
+// the picker in components/AnonAuthProvider.tsx: four patient personas plus
+// one clinician (staff) account. Run with:
 //   node scripts/seed-demo-patients.mjs
 //
 // Reads Supabase credentials from .env and/or .env.local in the project root
@@ -18,7 +19,7 @@ for (const filename of [".env", ".env.local"]) {
   const path = join(root, filename);
   if (!existsSync(path)) continue;
   for (const line of readFileSync(path, "utf8").split("\n")) {
-    const match = line.match(/^([A-Z_]+)=(.*)$/);
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (match) process.env[match[1]] = match[2];
   }
 }
@@ -49,6 +50,12 @@ const PERSONAS = [
   { label: "Speaker 04", email: requireEnv("DEMO_PATIENT_SP04_EMAIL"), password: requireEnv("DEMO_PATIENT_SP04_PASSWORD") },
 ];
 
+const CLINICIAN = {
+  label: "Clinician (staff)",
+  email: requireEnv("DEMO_CLINICIAN_EMAIL"),
+  password: requireEnv("DEMO_CLINICIAN_PASSWORD"),
+};
+
 async function findExistingUserByEmail(email) {
   // Admin listUsers doesn't support filtering by email server-side in all
   // versions, so page through and match — fine at this tiny scale.
@@ -63,7 +70,7 @@ async function findExistingUserByEmail(email) {
   }
 }
 
-async function seedPersona({ label, email, password }) {
+async function createOrRotateUser({ label, email, password }) {
   let user = await findExistingUserByEmail(email);
 
   if (!user) {
@@ -82,6 +89,13 @@ async function seedPersona({ label, email, password }) {
     if (updateError) throw updateError;
     console.log(`${label}: auth user already exists (${user.id}) — password rotated`);
   }
+
+  return user;
+}
+
+async function seedPersona(persona) {
+  const { label } = persona;
+  const user = await createOrRotateUser(persona);
 
   const { data: existingPatient, error: selectError } = await supabase
     .from("patients")
@@ -110,8 +124,29 @@ async function seedPersona({ label, email, password }) {
   }
 }
 
+async function seedClinician(clinician) {
+  const { label } = clinician;
+  const user = await createOrRotateUser(clinician);
+
+  const { data: existing, error: selectError } = await supabase
+    .from("clinicians")
+    .select("auth_user_id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (selectError) throw selectError;
+
+  if (!existing) {
+    const { error: insertError } = await supabase.from("clinicians").insert({ auth_user_id: user.id });
+    if (insertError) throw insertError;
+    console.log(`${label}: added to public.clinicians`);
+  } else {
+    console.log(`${label}: already in public.clinicians`);
+  }
+}
+
 for (const persona of PERSONAS) {
   await seedPersona(persona);
 }
+await seedClinician(CLINICIAN);
 
 console.log("Done.");

@@ -4,6 +4,7 @@ import { findPatient } from "@/lib/prometheux-patients";
 import { buildPatientNarrative } from "@/lib/clinical-narrative";
 import { TrendChart } from "@/components/TrendChart";
 import type { TrendPoint } from "@/lib/types";
+import { requireClinician } from "@/lib/clinician-auth";
 
 const SUBSYSTEM_LABELS: Record<string, string> = {
   functional_capacity: "Functional capacity",
@@ -12,6 +13,7 @@ const SUBSYSTEM_LABELS: Record<string, string> = {
 };
 
 export default async function PatientDetailPage({ params }: { params: Promise<{ speaker: string }> }) {
+  await requireClinician();
   const { speaker } = await params;
   const patient = findPatient(speaker);
   if (!patient) notFound();

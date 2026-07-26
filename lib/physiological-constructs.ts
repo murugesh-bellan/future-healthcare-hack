@@ -73,6 +73,7 @@ function combine(name: string, inputs: FeatureInput[]): ConstructResult {
 
 /** Fraction of the recording that was voiced speech rather than silence/pause. */
 function voicedRatioOf(signals: VoiceSignals): number | null {
+  if (signals.durationSeconds === null || signals.voicedSegmentDurationSeconds === null) return null;
   if (signals.durationSeconds <= 0) return null;
   return signals.voicedSegmentDurationSeconds / signals.durationSeconds;
 }
@@ -129,5 +130,5 @@ export const CONSTRUCT_DISPLAY_NAMES: Record<string, string> = {
   respiratory_support_index: "Respiratory Support",
   motor_coordination_index: "Motor Coordination",
   resonance_stability: "Resonance Stability",
-  fatigue_index: "Fatigue",
+  fatigue_index: "Low-Fatigue Index",
 };

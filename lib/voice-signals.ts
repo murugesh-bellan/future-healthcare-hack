@@ -12,12 +12,13 @@ export interface VoiceSignals {
   pitchStdHz: number | null;
   jitterPercent: number | null;
   shimmerPercent: number | null;
-  meanEnergyRms: number;
-  pauseRatio: number;
-  /** Total decoded recording length, including silence. */
-  durationSeconds: number;
-  /** Sum of frames classified as voiced (rms above threshold and a pitch estimate found) — excludes pauses/silence. */
-  voicedSegmentDurationSeconds: number;
+  /** null only when reconstructed server-side from a partial/older client payload — the client itself always computes a real value. */
+  meanEnergyRms: number | null;
+  pauseRatio: number | null;
+  /** Total decoded recording length, including silence. Null only when reconstructed server-side from a partial/older client payload. */
+  durationSeconds: number | null;
+  /** Sum of frames classified as voiced (rms above threshold and a pitch estimate found) — excludes pauses/silence. Null only when reconstructed server-side from a partial/older client payload. */
+  voicedSegmentDurationSeconds: number | null;
   speechRateWpm: number | null;
   /** Harmonics-to-noise ratio, dB (Boersma method: 10*log10(r/(1-r)) from mean voiced-frame autocorrelation). Lower = breathier/rougher. */
   hnrDb: number | null;
@@ -250,7 +251,7 @@ export function analyzeVoiceSignals(samples: Float32Array, sampleRate: number): 
 
 export function withSpeechRate(signals: VoiceSignals, transcript: string): VoiceSignals {
   const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
-  const minutes = signals.durationSeconds / 60;
-  const speechRateWpm = minutes > 0 ? Math.round(wordCount / minutes) : null;
+  const minutes = signals.durationSeconds !== null ? signals.durationSeconds / 60 : null;
+  const speechRateWpm = minutes !== null && minutes > 0 ? Math.round(wordCount / minutes) : null;
   return { ...signals, speechRateWpm };
 }
