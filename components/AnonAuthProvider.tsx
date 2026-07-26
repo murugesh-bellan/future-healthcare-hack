@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase";
+import { supabaseBrowser, isSupabaseConfigured } from "@/lib/supabase";
 
 /**
  * Public-safe persona metadata only — id and label, nothing that grants
@@ -34,13 +34,21 @@ type Status = "checking" | "picking" | "signing-in" | "ready" | "error";
  * access to /clinician — that route re-checks clinician membership
  * server-side (lib/clinician-auth.ts) since a client-side gate like this one
  * runs after a Server Component has already rendered on the server.
+ *
+ * When Supabase isn't configured at all (no live credentials yet), this
+ * skips the gate entirely and renders the app directly — every screen
+ * already falls back to real sample data on its own (see lib/trend-data.ts),
+ * so the app stays fully walkable with zero backend. Without this,
+ * supabaseBrowser() throwing synchronously here would have blocked every
+ * single screen, not just the ones that need a live session.
  */
 export function AnonAuthProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<Status>("checking");
+  const [status, setStatus] = useState<Status>(isSupabaseConfigured() ? "checking" : "ready");
   const [error, setError] = useState<string | null>(null);
   const [accessCode, setAccessCode] = useState("");
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) return;
     let cancelled = false;
     supabaseBrowser()
       .auth.getSession()

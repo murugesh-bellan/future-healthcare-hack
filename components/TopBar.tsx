@@ -1,6 +1,6 @@
 "use client";
 
-import { supabaseBrowser } from "@/lib/supabase";
+import { supabaseBrowser, isSupabaseConfigured } from "@/lib/supabase";
 
 interface TopBarProps {
   title: string;
@@ -9,6 +9,9 @@ interface TopBarProps {
 }
 
 async function switchDemoUser() {
+  // No live backend configured — nothing to sign out of; AnonAuthProvider
+  // already renders straight through without a session in this case.
+  if (!isSupabaseConfigured()) return;
   await supabaseBrowser().auth.signOut();
   // Full reload so AnonAuthProvider re-mounts and re-checks the (now cleared) session.
   window.location.href = "/";

@@ -9,8 +9,16 @@ import { supabaseServer } from "@/lib/supabase-server";
  * restrict who can reach this data. Redirects to "/" for both an
  * unauthenticated caller and an authenticated one who isn't in
  * public.clinicians.
+ *
+ * When Supabase isn't configured at all, this is a no-op rather than a
+ * throw: supabaseServer() would otherwise throw synchronously here, which
+ * breaks static prerendering of /clinician at build time (not just runtime),
+ * and would block the entire clinician view with zero backend configured —
+ * the clinician data itself (lib/prometheux-patients.ts) has no live-auth
+ * dependency by design, so the gate shouldn't impose one either in that case.
  */
 export async function requireClinician(): Promise<void> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
   const supabase = await supabaseServer();
   const {
     data: { user },

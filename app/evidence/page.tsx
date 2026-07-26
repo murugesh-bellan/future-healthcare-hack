@@ -5,10 +5,16 @@ import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/BottomNav";
 import type { Citation } from "@/lib/types";
 
+// Citation 1 is what Undertone directly implements. Citations 2-3 are
+// deliberately NOT framed as Undertone features — they don't exist here —
+// they're broader field evidence for why voice carries health signal at
+// all, which is what actually grounds building on this modality in the
+// first place. Mislabeling them as Undertone's own capabilities would be
+// an easy, avoidable thing for anyone reviewing this to catch.
 const CITATIONS: Citation[] = [
   {
     id: "cit_001",
-    metricLabel: "Muscle-Integrity Index",
+    metricLabel: "What Undertone measures — Muscle-Integrity Index",
     claim: "Voice features can classify frailty because vocal cords are muscle.",
     source: "Vocal biomarkers of sarcopenic frailty",
     venue: "JMIR",
@@ -17,8 +23,9 @@ const CITATIONS: Citation[] = [
   },
   {
     id: "cit_002",
-    metricLabel: "Cardiac risk signal",
-    claim: "Voice AI identified heart failure decompensation with 76-81% sensitivity, vs ~20% for daily weight checks.",
+    metricLabel: "Why voice, not just weight — supporting evidence",
+    claim:
+      "Elsewhere in cardiac care, voice AI caught patient deterioration with 76-81% sensitivity, vs ~20% for daily weight checks alone — evidence that voice carries signal other check-ins miss, not a claim Undertone detects cardiac risk.",
     source: "HearO",
     venue: "AHA",
     year: 2023,
@@ -26,8 +33,9 @@ const CITATIONS: Citation[] = [
   },
   {
     id: "cit_003",
-    metricLabel: "Metabolic risk signal",
-    claim: "Voice AI identified type 2 diabetes in a cohort of 607 people.",
+    metricLabel: "Voice reflects metabolic health too — supporting evidence",
+    claim:
+      "Voice AI has identified type 2 diabetes in a cohort of 607 people — further field evidence that metabolic state leaves a trace in how we sound, not a claim Undertone screens for diabetes.",
     source: "Voice-based diabetes detection",
     venue: "PLOS",
     year: 2024,
