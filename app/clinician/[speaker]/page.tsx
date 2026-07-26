@@ -91,6 +91,36 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
           </p>
         </section>
       ) : null}
+
+      {patient.frailty ? (
+        <section className="flex flex-col gap-stack-sm rounded-lg bg-surface-container p-container-margin shadow-sm">
+          <h2 className="text-label-md text-on-surface-variant uppercase tracking-widest">Frailty risk axes (JMIR 2024)</h2>
+          <p className="text-label-sm text-on-surface-variant/70">
+            Real logistic-regression log-odds coefficients from the cited study, correctly signed — not a calibrated
+            probability (the study&apos;s intercept and other covariates aren&apos;t available here).
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(
+              [
+                { label: "Energy-based frailty (A1 / zero-crossing axis)", series: patient.frailty.energyBasedLogOdds },
+                { label: "Sarcopenia-based frailty (A2 / shimmer axis)", series: patient.frailty.sarcopeniaBasedLogOdds },
+              ] as const
+            ).map(({ label, series }) => {
+              const latest = series[series.length - 1];
+              return (
+                <div key={label} className="flex flex-col gap-1 rounded-md bg-surface-container-low p-3">
+                  <span className="text-label-sm text-on-surface-variant">{label}</span>
+                  <span className="text-body-md font-semibold text-on-surface">
+                    {latest.logOdds >= 0 ? "+" : ""}
+                    {latest.logOdds.toFixed(4)} log-odds
+                  </span>
+                  <span className="text-label-sm text-on-surface-variant/60">as of {latest.date}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }
