@@ -80,3 +80,13 @@ export const FRAILTY_AXIS_LABELS: Record<FrailtyAxis, string> = {
   energy_based_frailty: "Energy-Based Frailty (A1)",
   sarcopenia_based_frailty: "Sarcopenia-Based Frailty (A2)",
 };
+
+/** patients table profile fields, for the Trends "Patient Profile" card. */
+export interface PatientProfile {
+  age: number | null;
+  sex: string | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  enrolledDate: string | null;
+  cohort: string | null;
+}

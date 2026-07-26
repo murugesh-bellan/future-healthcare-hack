@@ -10,6 +10,7 @@ export interface PatientRow {
   age: number | null;
   sex: string | null;
   height_cm: number | null;
+  weight_kg: number | null;
   enrolled_date: string | null;
   cohort: string | null;
   created_at: string;

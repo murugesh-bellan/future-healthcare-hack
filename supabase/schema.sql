@@ -23,6 +23,7 @@ alter table public.patients drop column if exists whatsapp_user_id;
 alter table public.patients add column if not exists age int;
 alter table public.patients add column if not exists sex text;
 alter table public.patients add column if not exists height_cm numeric;
+alter table public.patients add column if not exists weight_kg numeric;
 alter table public.patients add column if not exists enrolled_date date;
 alter table public.patients add column if not exists cohort text;
 

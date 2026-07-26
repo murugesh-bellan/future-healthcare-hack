@@ -1,6 +1,6 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import type { BaselineDriftRow, CheckInRow, FrailtyAssessmentRow, ScoreDecompositionRow, StrengthScoreRow } from "@/lib/database-types";
-import type { DataSource, DecompositionSummary, DriftSummary, FrailtySummary } from "@/lib/types";
+import type { DataSource, DecompositionSummary, DriftSummary, FrailtySummary, PatientProfile } from "@/lib/types";
 import { getWeightsForConstruct } from "@/lib/contribution-weights";
 import { getEvidence } from "@/lib/clinical-evidence";
 import mockData from "@/lib/mock-data.json";
@@ -23,7 +23,60 @@ const SAMPLE_DRIFT: DriftSummary = {
   zScore: Math.round((SAMPLE_PATIENT.maxDrop / SAMPLE_PATIENT.mad) * 100) / 100,
 };
 
+// age/sex/height/weight aren't in the Prometheux pull (it's check-in scores
+// only) — this is placeholder demo-profile data, same category as any
+// mockup's "Jane Doe, 34", always labeled "Sample data" like every other
+// fallback in this app. enrolledDate and cohort are real, though: enrolledDate
+// is SP01's actual first check-in date, and cohort matches the programme
+// context already shown elsewhere for this speaker (lib/prometheux-patients.ts).
+const SAMPLE_PROFILE: PatientProfile = {
+  age: 58,
+  sex: "Female",
+  heightCm: 162,
+  weightKg: 78,
+  enrolledDate: SAMPLE_PATIENT.history[0].date,
+  cohort: "GLP-1 weight-management programme",
+};
+
 export type { DecompositionSummary, DriftSummary, FrailtySummary } from "@/lib/types";
+
+/**
+ * Loads the signed-in patient's profile fields (age, sex, height, weight,
+ * enrollment date, cohort) for the Trends "Patient Profile" card. Falls
+ * back to bundled sample data whenever there's no session, no patient
+ * record, or the query fails — same pattern as every other loader here.
+ */
+export async function loadPatientProfile(): Promise<{ profile: PatientProfile; source: DataSource }> {
+  try {
+    const supabase = await supabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not signed in.");
+
+    const { data: patient, error } = await supabase
+      .from("patients")
+      .select("age, sex, height_cm, weight_kg, enrolled_date, cohort")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!patient) throw new Error("No patient record yet.");
+
+    return {
+      profile: {
+        age: patient.age,
+        sex: patient.sex,
+        heightCm: patient.height_cm,
+        weightKg: patient.weight_kg,
+        enrolledDate: patient.enrolled_date,
+        cohort: patient.cohort,
+      },
+      source: "live",
+    };
+  } catch {
+    return { profile: SAMPLE_PROFILE, source: "sample" };
+  }
+}
 
 /**
  * Loads the most recent check-in's strength-score decomposition — the
