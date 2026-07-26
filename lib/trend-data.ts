@@ -2,9 +2,21 @@ import { supabaseServer } from "@/lib/supabase-server";
 import type { CheckInRow, PhysiologicalConstructRow, StrengthScoreRow } from "@/lib/database-types";
 import type { DataSource, TrendPoint } from "@/lib/types";
 import { CONSTRUCT_DISPLAY_NAMES } from "@/lib/physiological-constructs";
-import mockData from "@/lib/mock-data.json";
+import { findPatient } from "@/lib/prometheux-patients";
 
 const WINDOW_DAYS = 90;
+
+// Sample-data fallback is built from SP04's real Prometheux history, not
+// generic mock data — without live credentials, every visitor was seeing a
+// near-flat placeholder line while the clinician view (lib/prometheux-patients.ts)
+// showed the real, dramatic trajectory for the same patient. SP04 has the
+// richest real per-construct pull from this session (vocal stability,
+// phonation efficiency, fatigue, functional capacity are all real numbers,
+// not authored); the other three constructs weren't individually pulled from
+// Prometheux this session, so they're derived from the same real functional-
+// capacity trajectory with a fixed offset rather than random noise, so the
+// *shape* stays authentic even where the exact number isn't independently measured.
+const SAMPLE_PATIENT = findPatient("SP04")!;
 
 export interface ConstructTrend {
   name: string;
@@ -19,6 +31,22 @@ function dayKey(date: Date) {
 /** Frequency-only fallback for days with check-ins but no strength_scores yet (e.g. before any pitch was ever detected). */
 function scoreForCount(count: number): number {
   return Math.max(0, Math.min(100, 50 + count * 6));
+}
+
+/** Carry-forward-fills SP04's 5 real check-ins across a WINDOW_DAYS span — same logic the live path uses, so the sample fallback isn't a flat placeholder. */
+function sampleTrendPoints(): TrendPoint[] {
+  const scoreByDay = new Map(SAMPLE_PATIENT.history.map((h) => [h.date, Math.round(h.score)]));
+  const firstDate = new Date(SAMPLE_PATIENT.history[0].date);
+  let lastKnownScore = Math.round(SAMPLE_PATIENT.history[0].score);
+
+  return Array.from({ length: WINDOW_DAYS }, (_, i) => {
+    const d = new Date(firstDate);
+    d.setDate(d.getDate() + i - Math.floor(WINDOW_DAYS / 4)); // centers the real 8-week span within the window
+    const key = dayKey(d);
+    const known = scoreByDay.get(key);
+    if (known !== undefined) lastKnownScore = known;
+    return { date: key, score: lastKnownScore, checkInCount: known !== undefined ? 1 : 0 };
+  });
 }
 
 /**
@@ -98,7 +126,7 @@ export async function loadTrend(): Promise<{ points: TrendPoint[]; source: DataS
 
     return { points, source: "live" };
   } catch {
-    return { points: mockData.trend.points as TrendPoint[], source: "sample" };
+    return { points: sampleTrendPoints(), source: "sample" };
   }
 }
 
@@ -168,13 +196,38 @@ export async function loadConstructTrends(): Promise<{ constructs: ConstructTren
   }
 }
 
-/** Bundled sample data — same shape a real signal-quality-limited or fresh account would eventually populate. */
-const SAMPLE_CONSTRUCT_TRENDS: ConstructTrend[] = Object.entries(CONSTRUCT_DISPLAY_NAMES).map(([name, displayName], i) => ({
+// Real per-construct values pulled from Prometheux for SP04 (see
+// docs/prometheux-reasoning-engine.md) — vocal_stability_index and the
+// strengthComponent breakdown (functional_capacity, fatigue_index,
+// phonation_efficiency) across the same 5 real check-ins used everywhere
+// else this patient appears. functional_capacity is the direct real proxy
+// for muscle_integrity_index (same subsystem shown in the clinician
+// breakdown table). The remaining three constructs weren't individually
+// pulled from Prometheux this session, so they're derived from the real
+// functional_capacity series with a fixed offset — same authentic shape,
+// not independently measured.
+const REAL_VOCAL_STABILITY = [56.78, 56.5, 54.51, 30.35, 24.01];
+const REAL_PHONATION_EFFICIENCY = [63.646, 63.143, 61.92, 42.114, 37.463];
+const REAL_FATIGUE = [78.39, 78.25, 77.255, 15.175, 12.005];
+const REAL_FUNCTIONAL_CAPACITY = [90.6125, 90.26, 90.08, 29.7875, 21.0275];
+
+const SAMPLE_CONSTRUCT_SERIES: Record<string, number[]> = {
+  muscle_integrity_index: REAL_FUNCTIONAL_CAPACITY,
+  vocal_stability_index: REAL_VOCAL_STABILITY,
+  phonation_efficiency: REAL_PHONATION_EFFICIENCY,
+  fatigue_index: REAL_FATIGUE,
+  respiratory_support_index: REAL_FUNCTIONAL_CAPACITY.map((v) => Math.max(10, Math.min(95, v - 5))),
+  motor_coordination_index: REAL_FUNCTIONAL_CAPACITY.map((v) => Math.max(10, Math.min(95, v - 12))),
+  resonance_stability: REAL_VOCAL_STABILITY.map((v) => Math.max(10, Math.min(95, v + 8))),
+};
+
+/** Bundled sample data — the same real, dramatic SP04 trajectory shown in the clinician view, not a generic placeholder. */
+const SAMPLE_CONSTRUCT_TRENDS: ConstructTrend[] = Object.entries(CONSTRUCT_DISPLAY_NAMES).map(([name, displayName]) => ({
   name,
   displayName,
-  points: mockData.trend.points.slice(-14).map((p, day) => ({
-    date: p.date,
-    score: Math.max(30, Math.min(95, 62 + Math.round(Math.sin(day / 3 + i) * 12))),
+  points: SAMPLE_PATIENT.history.map((h, i) => ({
+    date: h.date,
+    score: Math.round(SAMPLE_CONSTRUCT_SERIES[name][i]),
     checkInCount: 0,
   })),
 }));
