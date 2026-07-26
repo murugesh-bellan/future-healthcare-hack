@@ -4,11 +4,17 @@ import { useState } from "react";
 import type { ConstructTrend } from "@/lib/trend-data";
 
 /**
- * "Why this score" — collapsed by default, shows only the 1-2 measurements
- * actually worth a patient's attention, not all six at once. Consumer-tech
- * apps (Oura's Contributors, Whoop's Recovery factors) surface a short list
- * with a plain-language read, not a technical dashboard grid — this mirrors
- * that instead of the earlier six-card layout.
+ * Historical, per-construct trend bands (Vocal Stability, Phonation
+ * Efficiency, ...) — distinct from TrendsView's "Why This Score" section
+ * (a latest-check-in-only decomposition of 3 subsystems) and its raw
+ * biomarker sparklines (unfriendly feature names, not these named
+ * constructs). Named "Construct history" rather than reusing "Why this
+ * score" specifically to avoid two differently-modeled sections with the
+ * same title on one page. Collapsed by default, showing only the 1-2
+ * measurements actually worth a patient's attention, not all of them at
+ * once — consumer-tech apps (Oura's Contributors, Whoop's Recovery factors)
+ * surface a short list with a plain-language read, not a technical
+ * dashboard grid.
  */
 function bandFor(value: number): { label: string; note: string; className: string; needsAttention: boolean } {
   if (value >= 70) {
@@ -36,15 +42,27 @@ function windowLabel(pointCount: number): string {
   return "your last 14 days";
 }
 
+// Every construct from lib/scoring.ts is "higher = better" except fatigue_index,
+// which rises as vocal_stability_index/respiratory_support_index fall (higher =
+// more fatigued) — see the matching note on CONSTRUCT_DISPLAY_NAMES.fatigue_index
+// in lib/physiological-constructs.ts. bandFor()/sorting below need a uniform
+// "higher = better" direction, so this flips fatigue_index's score before either.
+function goodnessOf(name: string, score: number): number {
+  return name === "fatigue_index" ? 100 - score : score;
+}
+
 export function ConstructTrendsSection({ constructs }: { constructs: ConstructTrend[] }) {
   const [expanded, setExpanded] = useState(false);
   if (constructs.length === 0) return null;
 
   const withLatest = constructs
-    .map((c) => ({ ...c, latest: c.points[c.points.length - 1]?.score ?? 0 }))
-    .sort((a, b) => a.latest - b.latest); // worst-first, so the most relevant ones surface
+    .map((c) => {
+      const latest = c.points[c.points.length - 1]?.score ?? 0;
+      return { ...c, latest, goodness: goodnessOf(c.name, latest) };
+    })
+    .sort((a, b) => a.goodness - b.goodness); // worst-first, so the most relevant ones surface
 
-  const drivers = withLatest.filter((c) => bandFor(c.latest).needsAttention).slice(0, 2);
+  const drivers = withLatest.filter((c) => bandFor(c.goodness).needsAttention).slice(0, 2);
   const highlighted = drivers.length > 0 ? drivers : withLatest.slice(0, 1); // nothing to flag -> show the top one anyway
   const rest = withLatest.filter((c) => !highlighted.includes(c));
   const anyPoints = withLatest[0]?.points.length ?? 0;
@@ -57,7 +75,7 @@ export function ConstructTrendsSection({ constructs }: { constructs: ConstructTr
         aria-expanded={expanded}
       >
         <div>
-          <h2 className="text-body-md font-semibold text-on-surface">Why this score</h2>
+          <h2 className="text-body-md font-semibold text-on-surface">Construct history</h2>
           <p className="text-label-sm text-on-surface-variant/70">Based on {windowLabel(anyPoints)}</p>
         </div>
         <span className="material-symbols-outlined text-on-surface-variant">
@@ -67,7 +85,7 @@ export function ConstructTrendsSection({ constructs }: { constructs: ConstructTr
 
       <div className="flex flex-col gap-2">
         {highlighted.map((c) => {
-          const { label, note, className } = bandFor(c.latest);
+          const { label, note, className } = bandFor(c.goodness);
           return (
             <div key={c.name} className="flex items-center justify-between gap-3">
               <span className="text-body-md text-on-surface">{c.displayName}</span>
@@ -82,7 +100,7 @@ export function ConstructTrendsSection({ constructs }: { constructs: ConstructTr
       {expanded && rest.length > 0 ? (
         <div className="flex flex-col gap-2 border-t border-outline-variant/20 pt-2">
           {rest.map((c) => {
-            const { label, className } = bandFor(c.latest);
+            const { label, className } = bandFor(c.goodness);
             return (
               <div key={c.name} className="flex items-center justify-between gap-3">
                 <span className="text-body-md text-on-surface-variant">{c.displayName}</span>

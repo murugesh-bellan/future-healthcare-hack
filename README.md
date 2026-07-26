@@ -55,3 +55,7 @@ The channel lives at `agent/channels/whatsapp.ts`, so Eve exposes its webhook au
 1. Configure a WhatsApp Business app and add `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET` as Vercel environment variables.
 2. Point the app's webhook at the deployed Eve-generated WhatsApp route.
 3. The channel currently uses in-memory thread state (`@chat-adapter/state-memory`), which is fine for a demo but resets on redeploy/restart — swap in a durable Chat SDK state adapter before relying on it for real conversations at scale.
+
+
+
+

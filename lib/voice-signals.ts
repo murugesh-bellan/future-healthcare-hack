@@ -6,24 +6,40 @@
 //
 // These are illustrative acoustic signals, not clinically validated
 // biomarkers (same caveat as the "Strength Score" elsewhere in this app).
+// Some features (energyNormalized calibration, alphaRatioDb band split,
+// signalQuality thresholds) are hand-picked approximations, not derived from
+// a reference dataset — see inline notes at each constant.
+
+export type SignalQuality = "high" | "medium" | "low";
 
 export interface VoiceSignals {
   meanPitchHz: number | null;
   pitchStdHz: number | null;
+  /** Coefficient of variation of pitch (pitchStdHz / meanPitchHz) — unitless, ~0.05-0.2 typical. */
+  f0Cv: number | null;
   jitterPercent: number | null;
   shimmerPercent: number | null;
-  /** null only when reconstructed server-side from a partial/older client payload — the client itself always computes a real value. */
-  meanEnergyRms: number | null;
-  pauseRatio: number | null;
-  /** Total decoded recording length, including silence. Null only when reconstructed server-side from a partial/older client payload. */
-  durationSeconds: number | null;
-  /** Sum of frames classified as voiced (rms above threshold and a pitch estimate found) — excludes pauses/silence. Null only when reconstructed server-side from a partial/older client payload. */
-  voicedSegmentDurationSeconds: number | null;
-  speechRateWpm: number | null;
-  /** Harmonics-to-noise ratio, dB (Boersma method: 10*log10(r/(1-r)) from mean voiced-frame autocorrelation). Lower = breathier/rougher. */
+  /** Zero-crossing rate, fraction of adjacent sample pairs that change sign — 0-1, ~0.02-0.15 for voiced speech. */
+  zcr: number;
+  /** Harmonics-to-noise ratio in dB, from the pitch autocorrelation peak — null when no voiced frames found. */
   hnrDb: number | null;
-  /** Ratio of 50-1000 Hz to 1000-5000 Hz spectral energy, dB. A resonance/vocal-tract-quality measure. */
-  alphaRatioDb: number | null;
+  /** Spectral tilt: ratio of energy above ~1kHz to below it, in dB (negative — voice energy concentrates low). */
+  alphaRatioDb: number;
+  meanEnergyRms: number;
+  /** meanEnergyRms rescaled to a 0-1 "vocal energy" fraction via a fixed reference level (illustrative calibration). */
+  energyNormalized: number;
+  pauseRatio: number;
+  /** Fraction of frames classified voiced (rms above threshold and a pitch estimate found) — 0-1. */
+  voicedRatio: number;
+  /** Total decoded recording length, including silence. */
+  durationSeconds: number;
+  /** Sum of frames classified as voiced — excludes pauses/silence. */
+  voicedSegmentDurationSeconds: number;
+  speechRateWpm: number | null;
+  /** Syllables per second, estimated via vowel-group counting on the transcript. */
+  speechRateSyllPerSec: number | null;
+  /** Heuristic capture-quality label from voicedRatio + hnrDb, used as a per-check-in confidence proxy. */
+  signalQuality: SignalQuality;
 }
 
 const ANALYSIS_SAMPLE_RATE = 16000;
@@ -33,6 +49,12 @@ const MIN_PITCH_HZ = 70;
 const MAX_PITCH_HZ = 400;
 const VOICED_CORRELATION_THRESHOLD = 0.35;
 const SILENCE_RMS_THRESHOLD = 0.015;
+// Reference RMS mapped to a mid-scale (~0.55) "vocal energy" fraction — chosen so typical
+// conversational speech (RMS ~0.02-0.06 on normalized float PCM) lands near the formula's
+// expected center; not derived from a reference dataset.
+const ENERGY_REFERENCE_RMS = 0.08;
+// One-pole low-pass cutoff separating "low" from "high" band for the spectral-tilt (alpha ratio) estimate.
+const ALPHA_SPLIT_HZ = 1000;
 
 /** Nearest-neighbor decimation — good enough for pitch/energy estimation, not for audio fidelity. */
 function downsample(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
@@ -52,8 +74,25 @@ export function computeRms(frame: Float32Array): number {
   return Math.sqrt(sumSquares / frame.length);
 }
 
+/** Fraction of adjacent sample pairs whose sign differs. */
+export function computeZcr(frame: Float32Array): number {
+  if (frame.length < 2) return 0;
+  let crossings = 0;
+  for (let i = 1; i < frame.length; i++) {
+    if ((frame[i] >= 0) !== (frame[i - 1] >= 0)) crossings++;
+  }
+  return crossings / (frame.length - 1);
+}
+
+interface Periodicity {
+  lagSamples: number;
+  correlation: number;
+}
+
 /**
- * Normalized-autocorrelation pitch estimate. Returns null for unvoiced/silent/noisy frames.
+ * Core normalized-autocorrelation search: best correlation and its lag over
+ * the pitch-range lags. Shared by pitch estimation and HNR (both are derived
+ * from the same peak, so this is computed once per frame, not twice).
  *
  * A pure tone correlates almost as strongly at 2x/3x its true period as at the
  * true period itself (harmonically related lags), so picking the single
@@ -67,7 +106,7 @@ export function computeRms(frame: Float32Array): number {
  * below) the raw material for HNR, so the expensive autocorrelation loop
  * only runs once per frame instead of twice.
  */
-export function estimatePitch(frame: Float32Array, sampleRate: number): { hz: number; correlation: number } | null {
+function bestPeriodicity(frame: Float32Array, sampleRate: number): Periodicity | null {
   const minLag = Math.floor(sampleRate / MAX_PITCH_HZ);
   const maxLag = Math.floor(sampleRate / MIN_PITCH_HZ);
   if (maxLag >= frame.length) return null;
@@ -95,71 +134,26 @@ export function estimatePitch(frame: Float32Array, sampleRate: number): { hz: nu
   const acceptThreshold = globalBestCorr * 0.9;
   for (let i = 0; i < correlations.length; i++) {
     if (correlations[i] >= acceptThreshold) {
-      return { hz: sampleRate / (minLag + i), correlation: correlations[i] };
+      return { lagSamples: minLag + i, correlation: correlations[i] };
     }
   }
   return null;
 }
 
-/** In-place iterative radix-2 FFT. `re`/`im` length must be a power of two. */
-function fft(re: Float64Array, im: Float64Array): void {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) {
-      [re[i], re[j]] = [re[j], re[i]];
-      [im[i], im[j]] = [im[j], im[i]];
-    }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = (-2 * Math.PI) / len;
-    const wRe = Math.cos(ang);
-    const wIm = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let curRe = 1;
-      let curIm = 0;
-      for (let k = 0; k < len / 2; k++) {
-        const uRe = re[i + k];
-        const uIm = im[i + k];
-        const vRe = re[i + k + len / 2] * curRe - im[i + k + len / 2] * curIm;
-        const vIm = re[i + k + len / 2] * curIm + im[i + k + len / 2] * curRe;
-        re[i + k] = uRe + vRe;
-        im[i + k] = uIm + vIm;
-        re[i + k + len / 2] = uRe - vRe;
-        im[i + k + len / 2] = uIm - vIm;
-        const nextRe = curRe * wRe - curIm * wIm;
-        curIm = curRe * wIm + curIm * wRe;
-        curRe = nextRe;
-      }
-    }
-  }
+/** Normalized-autocorrelation pitch estimate. Returns null for unvoiced/silent/noisy frames. */
+export function estimatePitchHz(frame: Float32Array, sampleRate: number): number | null {
+  const periodicity = bestPeriodicity(frame, sampleRate);
+  return periodicity ? sampleRate / periodicity.lagSamples : null;
 }
 
-/** Ratio of 50-1000 Hz to 1000-5000 Hz energy, in dB, for one voiced frame. */
-function frameAlphaRatioDb(frame: Float32Array, sampleRate: number): number | null {
-  const size = 1 << Math.ceil(Math.log2(frame.length));
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
-  for (let i = 0; i < frame.length; i++) {
-    // Hann window to limit spectral leakage.
-    const w = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (frame.length - 1)));
-    re[i] = frame[i] * w;
-  }
-  fft(re, im);
-
-  const binHz = sampleRate / size;
-  let lowTotal = 0;
-  let highTotal = 0;
-  for (let bin = 1; bin < size / 2; bin++) {
-    const hz = bin * binHz;
-    const power = re[bin] * re[bin] + im[bin] * im[bin];
-    if (hz >= 50 && hz < 1000) lowTotal += power;
-    else if (hz >= 1000 && hz <= 5000) highTotal += power;
-  }
-  if (lowTotal <= 0 || highTotal <= 0) return null;
-  return 10 * Math.log10(lowTotal / highTotal);
+/**
+ * Autocorrelation-based harmonics-to-noise ratio in dB (Boersma's formula:
+ * HNR = 10·log10(r / (1 − r)), r the normalized-autocorrelation peak).
+ * Clamps r away from 1 to avoid a divide-by-zero blowing up to +Infinity.
+ */
+function correlationToHnrDb(r: number): number {
+  const clamped = Math.min(r, 0.999999);
+  return 10 * Math.log10(clamped / (1 - clamped));
 }
 
 function mean(values: number[]): number {
@@ -187,71 +181,116 @@ function relativeVariation(values: number[]): number | null {
   return count > 0 ? (total / count) * 100 : null;
 }
 
+/**
+ * Spectral tilt: RMS energy above ALPHA_SPLIT_HZ relative to below it, in dB.
+ * Uses a single-pole low-pass filter over the whole buffer (the low band),
+ * with the high band taken as the residual (signal minus low band) — a cheap
+ * approximation, not a brick-wall filter, consistent with this module's
+ * "kept cheap" DSP elsewhere.
+ */
+function computeAlphaRatioDb(samples: Float32Array, sampleRate: number): number {
+  const rc = 1 / (2 * Math.PI * ALPHA_SPLIT_HZ);
+  const dt = 1 / sampleRate;
+  const alpha = dt / (rc + dt);
+
+  let low = 0;
+  let lowSumSquares = 0;
+  let highSumSquares = 0;
+  for (let i = 0; i < samples.length; i++) {
+    low = low + alpha * (samples[i] - low);
+    const high = samples[i] - low;
+    lowSumSquares += low * low;
+    highSumSquares += high * high;
+  }
+  const lowRms = Math.sqrt(lowSumSquares / samples.length);
+  const highRms = Math.sqrt(highSumSquares / samples.length);
+  if (lowRms === 0) return 0;
+  return 20 * Math.log10(highRms / lowRms);
+}
+
+/** Heuristic capture-quality label — not a measured SNR, just a proxy from what we can estimate cheaply. */
+function classifySignalQuality(voicedRatio: number, hnrDb: number | null): SignalQuality {
+  if (voicedRatio >= 0.5 && hnrDb !== null && hnrDb >= 15) return "high";
+  if (voicedRatio >= 0.25) return "medium";
+  return "low";
+}
+
 export function analyzeVoiceSignals(samples: Float32Array, sampleRate: number): VoiceSignals {
   const durationSeconds = samples.length / sampleRate;
   const analysis = downsample(samples, sampleRate, ANALYSIS_SAMPLE_RATE);
   const analysisRate = Math.min(sampleRate, ANALYSIS_SAMPLE_RATE);
 
   const frameRms: number[] = [];
+  const frameZcr: number[] = [];
   const voicedPitchesHz: number[] = [];
   const voicedAmplitudes: number[] = [];
   const voicedCorrelations: number[] = [];
-  const alphaRatiosDb: number[] = [];
 
   for (let start = 0; start + FRAME_SIZE <= analysis.length; start += HOP_SIZE) {
     const frame = analysis.subarray(start, start + FRAME_SIZE);
     const rms = computeRms(frame);
     frameRms.push(rms);
+    frameZcr.push(computeZcr(frame));
 
     if (rms < SILENCE_RMS_THRESHOLD) continue;
-    const pitch = estimatePitch(frame, analysisRate);
-    if (pitch !== null) {
-      voicedPitchesHz.push(pitch.hz);
+    const periodicity = bestPeriodicity(frame, analysisRate);
+    if (periodicity !== null) {
+      voicedPitchesHz.push(analysisRate / periodicity.lagSamples);
       voicedAmplitudes.push(rms);
-      voicedCorrelations.push(pitch.correlation);
-      const alpha = frameAlphaRatioDb(frame, analysisRate);
-      if (alpha !== null) alphaRatiosDb.push(alpha);
+      voicedCorrelations.push(periodicity.correlation);
     }
   }
 
   const meanPitchHz = voicedPitchesHz.length > 0 ? mean(voicedPitchesHz) : null;
   const pitchStdHz = meanPitchHz !== null ? stdDev(voicedPitchesHz, meanPitchHz) : null;
+  const f0Cv = meanPitchHz !== null && pitchStdHz !== null && meanPitchHz !== 0 ? pitchStdHz / meanPitchHz : null;
   // Jitter is conventionally expressed in terms of period (1/f0), not frequency.
   const jitterPercent = relativeVariation(voicedPitchesHz.map((hz) => 1 / hz));
   const shimmerPercent = relativeVariation(voicedAmplitudes);
+  const zcr = frameZcr.length > 0 ? mean(frameZcr) : 0;
+  const hnrDb = voicedCorrelations.length > 0 ? mean(voicedCorrelations.map(correlationToHnrDb)) : null;
+  const alphaRatioDb = computeAlphaRatioDb(analysis, analysisRate);
   const meanEnergyRms = frameRms.length > 0 ? mean(frameRms) : 0;
+  const energyNormalized = Math.max(0, Math.min(1, meanEnergyRms / ENERGY_REFERENCE_RMS));
   const silentFrames = frameRms.filter((rms) => rms < SILENCE_RMS_THRESHOLD).length;
   const pauseRatio = frameRms.length > 0 ? silentFrames / frameRms.length : 0;
+  const voicedRatio = frameRms.length > 0 ? voicedPitchesHz.length / frameRms.length : 0;
   // Each voiced frame contributes one non-overlapping HOP_SIZE-wide slice of audio.
   const voicedSegmentDurationSeconds = (voicedPitchesHz.length * HOP_SIZE) / analysisRate;
-
-  // HNR from the mean peak autocorrelation across voiced frames (Boersma method).
-  let hnrDb: number | null = null;
-  if (voicedCorrelations.length > 0) {
-    const rMean = mean(voicedCorrelations);
-    const rClamped = Math.min(Math.max(rMean, 1e-6), 0.999999);
-    hnrDb = 10 * Math.log10(rClamped / (1 - rClamped));
-  }
-  const alphaRatioDb = alphaRatiosDb.length > 0 ? mean(alphaRatiosDb) : null;
 
   return {
     meanPitchHz,
     pitchStdHz,
+    f0Cv,
     jitterPercent,
     shimmerPercent,
+    zcr,
+    hnrDb,
+    alphaRatioDb,
     meanEnergyRms,
+    energyNormalized,
     pauseRatio,
+    voicedRatio,
     durationSeconds,
     voicedSegmentDurationSeconds,
     speechRateWpm: null,
-    hnrDb,
-    alphaRatioDb,
+    speechRateSyllPerSec: null,
+    signalQuality: classifySignalQuality(voicedRatio, hnrDb),
   };
 }
 
+/** Crude vowel-group heuristic — not a real syllabifier, but standard for lightweight NLP. Minimum 1 per word. */
+function estimateSyllableCount(word: string): number {
+  const matches = word.toLowerCase().match(/[aeiouy]+/g);
+  return Math.max(1, matches?.length ?? 1);
+}
+
 export function withSpeechRate(signals: VoiceSignals, transcript: string): VoiceSignals {
-  const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
-  const minutes = signals.durationSeconds !== null ? signals.durationSeconds / 60 : null;
-  const speechRateWpm = minutes !== null && minutes > 0 ? Math.round(wordCount / minutes) : null;
-  return { ...signals, speechRateWpm };
+  const words = transcript.trim().split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const minutes = signals.durationSeconds / 60;
+  const speechRateWpm = minutes > 0 ? Math.round(wordCount / minutes) : null;
+  const syllableCount = words.reduce((sum, w) => sum + estimateSyllableCount(w), 0);
+  const speechRateSyllPerSec = signals.durationSeconds > 0 ? syllableCount / signals.durationSeconds : null;
+  return { ...signals, speechRateWpm, speechRateSyllPerSec };
 }
