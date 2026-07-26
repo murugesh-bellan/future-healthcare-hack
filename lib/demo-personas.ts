@@ -3,8 +3,10 @@
 // Credentials live in env vars (not committed) — see scripts/seed-demo-patients.mjs,
 // which creates/rotates these accounts from the same source.
 
+export type DemoPersonaId = "sp01" | "sp02" | "sp03" | "sp04" | "clinician";
+
 export interface DemoPersona {
-  id: "a" | "b";
+  id: DemoPersonaId;
   label: string;
   email: string;
   password: string;
@@ -16,10 +18,25 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/**
+ * Demo identities match the real Prometheux "Undertone Physiological Voice
+ * Engine" speakers (SP01-SP04) rather than generic "Patient A/B" — same
+ * speaker ids used in lib/prometheux-patients.ts and the clinician view, so
+ * a patient's own check-in history and their entry in the cohort table are
+ * recognizably the same person.
+ */
 export function getDemoPersonas(): readonly DemoPersona[] {
   return [
-    { id: "a", label: "Patient A", email: requireEnv("DEMO_PATIENT_A_EMAIL"), password: requireEnv("DEMO_PATIENT_A_PASSWORD") },
-    { id: "b", label: "Patient B", email: requireEnv("DEMO_PATIENT_B_EMAIL"), password: requireEnv("DEMO_PATIENT_B_PASSWORD") },
+    { id: "sp01", label: "Speaker 01", email: requireEnv("DEMO_PATIENT_SP01_EMAIL"), password: requireEnv("DEMO_PATIENT_SP01_PASSWORD") },
+    { id: "sp02", label: "Speaker 02", email: requireEnv("DEMO_PATIENT_SP02_EMAIL"), password: requireEnv("DEMO_PATIENT_SP02_PASSWORD") },
+    { id: "sp03", label: "Speaker 03", email: requireEnv("DEMO_PATIENT_SP03_EMAIL"), password: requireEnv("DEMO_PATIENT_SP03_PASSWORD") },
+    { id: "sp04", label: "Speaker 04", email: requireEnv("DEMO_PATIENT_SP04_EMAIL"), password: requireEnv("DEMO_PATIENT_SP04_PASSWORD") },
+    // Staff account, not a speaker/patient — signing in as this identity does not
+    // create a patients row. Whether it can reach /clinician is decided
+    // separately, by membership in public.clinicians (see lib/clinician-auth.ts),
+    // not by knowing this password. The access code below is just the shared
+    // demo-login gate, same as for every patient persona.
+    { id: "clinician", label: "Clinician (staff)", email: requireEnv("DEMO_CLINICIAN_EMAIL"), password: requireEnv("DEMO_CLINICIAN_PASSWORD") },
   ];
 }
 

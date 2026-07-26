@@ -100,6 +100,11 @@ interface Periodicity {
  * subharmonics from frame to frame ("octave errors"). Instead, take the
  * *shortest* lag whose correlation is within 90% of the global best — the
  * true fundamental is always the shortest strong peak.
+ *
+ * Also returns the peak correlation strength alongside the frequency — the
+ * same value the pitch decision was based on, and (via `frameCorrelation`
+ * below) the raw material for HNR, so the expensive autocorrelation loop
+ * only runs once per frame instead of twice.
  */
 function bestPeriodicity(frame: Float32Array, sampleRate: number): Periodicity | null {
   const minLag = Math.floor(sampleRate / MAX_PITCH_HZ);

@@ -1,7 +1,8 @@
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/BottomNav";
 import { TrendsView } from "@/components/TrendsView";
-import { loadTrend } from "@/lib/trend-data";
+import { ConstructTrendsSection } from "@/components/ConstructTrendsSection";
+import { loadTrend, loadConstructTrends } from "@/lib/trend-data";
 import { loadBiomarkers } from "@/lib/biomarkers-data";
 import { loadLatestDecomposition, loadLatestDrift, loadLatestFrailty } from "@/lib/score-data";
 
@@ -12,14 +13,16 @@ export default async function TrendsPage() {
     { decomposition, source: decompositionSource },
     { drift, source: driftSource },
     { frailty, source: frailtySource },
+    { constructs, source: constructSource },
   ] = await Promise.all([
     loadTrend(),
     loadBiomarkers(),
     loadLatestDecomposition(),
     loadLatestDrift(),
     loadLatestFrailty(),
+    loadConstructTrends(),
   ]);
-  const sources = [trendSource, biomarkerSource, decompositionSource, driftSource, frailtySource];
+  const sources = [trendSource, biomarkerSource, decompositionSource, driftSource, frailtySource, constructSource];
   const source = sources.every((s) => s === "live") ? "live" : "sample";
 
   return (
@@ -34,6 +37,7 @@ export default async function TrendsPage() {
           frailty={frailty}
           source={source}
         />
+        <ConstructTrendsSection constructs={constructs} />
       </main>
       <BottomNav />
     </>

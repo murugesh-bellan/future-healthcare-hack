@@ -4,8 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useEveAgent } from "eve/react";
 import { TopBar } from "@/components/TopBar";
 import { analyzeVoiceSignals, withSpeechRate, type VoiceSignals } from "@/lib/voice-signals";
+import { CONSTRUCT_DISPLAY_NAMES } from "@/lib/physiological-constructs";
 
 type Phase = "loading" | "consent" | "ready" | "recording" | "processing" | "success" | "error";
+
+interface ConstructSummary {
+  name: string;
+  value: number;
+  formula: string;
+  confidence: number;
+}
 
 const DEFAULT_REPLY = "Logged. Thanks for checking in.";
 const MAX_RECORDING_MS = 20_000;
@@ -61,6 +69,8 @@ export default function CheckInPage() {
   const [replyText, setReplyText] = useState("");
   const [errorText, setErrorText] = useState("");
   const [barHeights, setBarHeights] = useState([16, 32, 48, 24, 40]);
+  const [constructs, setConstructs] = useState<ConstructSummary[] | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -358,6 +368,7 @@ export default function CheckInPage() {
 
     setReplyText(text);
     setPhase("success");
+    void loadLatestBreakdown();
 
     // Speak whatever's left after the sentences already queued during
     // streaming — covers a trailing fragment with no terminal punctuation,
@@ -370,6 +381,22 @@ export default function CheckInPage() {
     }
   }
 
+  /**
+   * Fetches the just-saved check-in's physiological-construct breakdown.
+   * Best-effort: the tool that saves a check-in returns a chat reply, not
+   * structured data, so this is a separate round trip — if it's slow or
+   * fails, the "Logged!" screen still stands on its own.
+   */
+  async function loadLatestBreakdown() {
+    try {
+      const res = await fetch("/api/checkins/latest");
+      const body = await res.json();
+      setConstructs(body.constructs?.length > 0 ? body.constructs : null);
+    } catch {
+      setConstructs(null);
+    }
+  }
+
   function resetFlow() {
     clearAgentTimeout();
     beginNewTurn();
@@ -377,6 +404,8 @@ export default function CheckInPage() {
     setPhase("ready");
     setStatusText("Tap to speak");
     setReplyText("");
+    setConstructs(null);
+    setShowBreakdown(false);
   }
 
   return (
@@ -476,6 +505,44 @@ export default function CheckInPage() {
                   <h3 className="text-headline-md text-primary">Logged!</h3>
                   <p className="leading-relaxed text-body-md text-on-surface">{replyText}</p>
                 </div>
+
+                {constructs && constructs.length > 0 ? (
+                  <div className="w-full">
+                    <button
+                      onClick={() => setShowBreakdown((v) => !v)}
+                      className="flex w-full items-center justify-between rounded-md bg-surface-container-low/80 px-3 py-2 text-label-sm text-on-surface-variant transition-colors active:bg-surface-container-low"
+                    >
+                      <span>See what we&apos;re assessing</span>
+                      <span className="material-symbols-outlined text-[18px]">
+                        {showBreakdown ? "expand_less" : "expand_more"}
+                      </span>
+                    </button>
+                    {showBreakdown ? (
+                      <div className="mt-2 space-y-3 rounded-md bg-surface-container-low/80 p-3">
+                        <p className="text-label-sm text-on-surface-variant/80">
+                          Illustrative acoustic signals for your wellness trend — not a medical reading.
+                        </p>
+                        {constructs.map((c) => (
+                          <div key={c.name} className="border-t border-white/5 pt-2 first:border-t-0 first:pt-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-body-md text-on-surface">
+                                {CONSTRUCT_DISPLAY_NAMES[c.name] ?? c.name}
+                              </span>
+                              <span className="text-label-md font-semibold text-primary">{c.value}/100</span>
+                            </div>
+                            <p className="mt-0.5 text-label-sm text-on-surface-variant/80">{c.formula}</p>
+                            {c.confidence < 1 ? (
+                              <p className="mt-0.5 text-label-sm text-on-surface-variant/60">
+                                Based on partial data for this recording.
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <button
                   onClick={resetFlow}
                   className="mt-4 rounded-full bg-secondary-container px-6 py-3 text-label-md text-on-secondary-container transition-transform active:scale-95"

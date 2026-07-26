@@ -24,6 +24,13 @@ alter table public.patients add column if not exists height_cm numeric;
 alter table public.patients add column if not exists enrolled_date date;
 alter table public.patients add column if not exists cohort text;
 
+-- Membership table gating /clinician: an auth.users row present here can view
+-- the cohort view; a signed-in patient (or an unauthenticated visitor) cannot.
+create table if not exists public.clinicians (
+  auth_user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.medications (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -288,6 +295,7 @@ create index if not exists baseline_drifts_patient_construct_idx on public.basel
 -- ============================================================================
 
 alter table public.patients enable row level security;
+alter table public.clinicians enable row level security;
 alter table public.medications enable row level security;
 alter table public.glp1_therapies enable row level security;
 alter table public.check_ins enable row level security;
@@ -305,6 +313,13 @@ alter table public.baseline_drifts enable row level security;
 drop policy if exists "Patients can read their own profile" on public.patients;
 create policy "Patients can read their own profile"
 on public.patients for select
+using (auth.uid() = auth_user_id);
+
+-- Lets a signed-in user check only their own membership — not enumerate the
+-- clinician roster. requireClinician() (lib/clinician-auth.ts) relies on this.
+drop policy if exists "Users can check their own clinician membership" on public.clinicians;
+create policy "Users can check their own clinician membership"
+on public.clinicians for select
 using (auth.uid() = auth_user_id);
 
 -- Medications are a shared, non-PII catalogue: any signed-in user can read it.

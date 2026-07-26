@@ -3,7 +3,10 @@ import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase-server";
 import { findDemoPersona } from "@/lib/demo-personas";
 
-const bodySchema = z.object({ personaId: z.enum(["a", "b"]), accessCode: z.string().min(1) });
+const bodySchema = z.object({
+  personaId: z.enum(["sp01", "sp02", "sp03", "sp04", "clinician"]),
+  accessCode: z.string().min(1),
+});
 
 function isCorrectAccessCode(candidate: string): boolean {
   const expected = process.env.DEMO_ACCESS_CODE;
@@ -16,13 +19,15 @@ function isCorrectAccessCode(candidate: string): boolean {
 }
 
 /**
- * Signs in as one of the two fixed demo personas. Gated behind a shared
- * access code (DEMO_ACCESS_CODE) so this isn't a public "become any demo
- * patient" endpoint — moving credentials server-side only stops browser
- * bundling, it doesn't restrict who can call the route. Credentials
- * themselves stay server-side (lib/demo-personas.ts) and the resulting
- * session cookie is set directly via supabaseServer(), which is
- * cookie-writable from a Route Handler.
+ * Signs in as one of the fixed demo personas (four patients, one clinician).
+ * Gated behind a shared access code (DEMO_ACCESS_CODE) so this isn't a public
+ * "become any demo identity" endpoint — moving credentials server-side only
+ * stops browser bundling, it doesn't restrict who can call the route.
+ * Credentials themselves stay server-side (lib/demo-personas.ts) and the
+ * resulting session cookie is set directly via supabaseServer(), which is
+ * cookie-writable from a Route Handler. Signing in here does not by itself
+ * grant access to /clinician — that's checked separately, against
+ * public.clinicians, by requireClinician() (lib/clinician-auth.ts).
  */
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
