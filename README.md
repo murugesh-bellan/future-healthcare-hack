@@ -6,7 +6,7 @@ Voice-first chronic-care check-ins through a WebApp and WhatsApp.
 
 - Next.js + Tailwind CSS v4 on Vercel for the WebApp and API routes
 - Eve + Vercel AI Gateway for the durable shared agent
-- Vercel Chat SDK WhatsApp adapter for WhatsApp webhooks
+- Eve's Twilio channel (`eve/channels/twilio`) for WhatsApp, via Twilio's WhatsApp Sandbox/sender
 - Supabase Auth (anonymous sign-in), Postgres, and row-level security
 - ElevenLabs for transcription and synthesized voice replies
 
@@ -50,11 +50,12 @@ This project is a prototype. The agent must not diagnose or make treatment decis
 
 ## WhatsApp setup
 
-The channel lives at `agent/channels/whatsapp.ts`, so Eve exposes its webhook automatically. To go live:
+The channel lives at `agent/channels/whatsapp.ts`, built on eve's Twilio channel (`eve/channels/twilio`) rather than a WhatsApp-specific SDK — Twilio's Messages API is the same for SMS and WhatsApp, just with numbers formatted as `whatsapp:+1415...`, so no WhatsApp-specific adapter is needed. To go live:
 
-1. Configure a WhatsApp Business app and add `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET` as Vercel environment variables.
-2. Point the app's webhook at the deployed Eve-generated WhatsApp route.
-3. The channel currently uses in-memory thread state (`@chat-adapter/state-memory`), which is fine for a demo but resets on redeploy/restart — swap in a durable Chat SDK state adapter before relying on it for real conversations at scale.
+1. In the Twilio Console, activate the WhatsApp Sandbox (Messaging → Try it out → Send a WhatsApp message) for instant testing with no Meta business verification, or apply for your own WhatsApp Business sender for production.
+2. Add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (also verifies inbound webhook signatures), `TWILIO_WHATSAPP_FROM` (e.g. `whatsapp:+14155238886` for the Sandbox), and `TWILIO_ALLOWED_FROM` (comma-separated `whatsapp:+...` numbers permitted to reach the agent — required, not `"*"`, so the shared Sandbox number can't let a stranger who joined it start creating patient rows) as Vercel environment variables.
+3. Point the Sandbox's (or your sender's) Messaging webhook at `/eve/v1/twilio/messages` on the deployed app.
+4. Each tester joins the Sandbox once by sending its join code (shown in the Twilio Console) to the Sandbox number from their own WhatsApp.
 
 
 

@@ -10,8 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@chat-adapter/state-memory": "latest",
-    "@chat-adapter/whatsapp": "latest",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "latest",
     "@tailwindcss/postcss": "^4.3.3",
