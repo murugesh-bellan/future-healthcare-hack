@@ -11,8 +11,10 @@ import { supabaseBrowser } from "@/lib/supabase";
  * sign-in and enforces who's allowed to.
  */
 const PERSONA_OPTIONS = [
-  { id: "a", label: "Patient A" },
-  { id: "b", label: "Patient B" },
+  { id: "sp01", label: "Speaker 01" },
+  { id: "sp02", label: "Speaker 02" },
+  { id: "sp03", label: "Speaker 03" },
+  { id: "sp04", label: "Speaker 04" },
 ] as const;
 
 type Status = "checking" | "picking" | "signing-in" | "ready" | "error";

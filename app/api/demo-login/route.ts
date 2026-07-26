@@ -3,7 +3,7 @@ import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase-server";
 import { findDemoPersona } from "@/lib/demo-personas";
 
-const bodySchema = z.object({ personaId: z.enum(["a", "b"]), accessCode: z.string().min(1) });
+const bodySchema = z.object({ personaId: z.enum(["sp01", "sp02", "sp03", "sp04"]), accessCode: z.string().min(1) });
 
 function isCorrectAccessCode(candidate: string): boolean {
   const expected = process.env.DEMO_ACCESS_CODE;

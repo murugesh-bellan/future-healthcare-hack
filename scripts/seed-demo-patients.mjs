@@ -43,8 +43,10 @@ function requireEnv(name) {
 // no credentials duplicated in source. Re-running this script rotates the
 // live password to whatever's currently in .env.
 const PERSONAS = [
-  { label: "Patient A", email: requireEnv("DEMO_PATIENT_A_EMAIL"), password: requireEnv("DEMO_PATIENT_A_PASSWORD") },
-  { label: "Patient B", email: requireEnv("DEMO_PATIENT_B_EMAIL"), password: requireEnv("DEMO_PATIENT_B_PASSWORD") },
+  { label: "Speaker 01", email: requireEnv("DEMO_PATIENT_SP01_EMAIL"), password: requireEnv("DEMO_PATIENT_SP01_PASSWORD") },
+  { label: "Speaker 02", email: requireEnv("DEMO_PATIENT_SP02_EMAIL"), password: requireEnv("DEMO_PATIENT_SP02_PASSWORD") },
+  { label: "Speaker 03", email: requireEnv("DEMO_PATIENT_SP03_EMAIL"), password: requireEnv("DEMO_PATIENT_SP03_PASSWORD") },
+  { label: "Speaker 04", email: requireEnv("DEMO_PATIENT_SP04_EMAIL"), password: requireEnv("DEMO_PATIENT_SP04_PASSWORD") },
 ];
 
 async function findExistingUserByEmail(email) {
