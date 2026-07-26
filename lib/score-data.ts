@@ -4,6 +4,20 @@ import type { DataSource, DecompositionSummary, DriftSummary, FrailtySummary } f
 import { getWeightsForConstruct } from "@/lib/contribution-weights";
 import { getEvidence } from "@/lib/clinical-evidence";
 import mockData from "@/lib/mock-data.json";
+import { findPatient } from "@/lib/prometheux-patients";
+
+// mockData.drift is a generic, unrelated fixture (hardcoded "recovering") —
+// using it here produced a "trending up, nice momentum" Trend Insight card
+// on top of a Trends page showing SP04's real 71->38 decline. This derives
+// the same summary from SP04's real, already-computed Prometheux drift
+// fields instead (see lib/prometheux-patients.ts), so the two agree.
+const SAMPLE_PATIENT = findPatient("SP04")!;
+const SAMPLE_DRIFT: DriftSummary = {
+  direction: SAMPLE_PATIENT.direction,
+  changePointDetected: SAMPLE_PATIENT.changePoint,
+  trendSlope: SAMPLE_PATIENT.slope,
+  zScore: Math.round((SAMPLE_PATIENT.maxDrop / SAMPLE_PATIENT.mad) * 100) / 100,
+};
 
 export type { DecompositionSummary, DriftSummary, FrailtySummary } from "@/lib/types";
 
@@ -101,7 +115,7 @@ export async function loadLatestDrift(): Promise<{ drift: DriftSummary | null; s
       source: "live",
     };
   } catch {
-    return { drift: mockData.drift as DriftSummary, source: "sample" };
+    return { drift: SAMPLE_DRIFT, source: "sample" };
   }
 }
 
