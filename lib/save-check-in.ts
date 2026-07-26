@@ -234,15 +234,15 @@ async function scoreAndPersist(
 }
 
 /**
- * Shared persistence used by both `agent/tools/save-check-in.ts` (the only
- * path WhatsApp has) and `app/api/check-in/route.ts` (the web direct-save
- * path) — keeps both callers writing identically instead of the logic
- * drifting between a tool and a route handler.
+ * Shared persistence used by both `agent/tools/save-check-in.ts` (the agent's
+ * fallback path) and `app/api/check-in/route.ts` (the web direct-save path) —
+ * keeps both callers writing identically instead of the logic drifting
+ * between a tool and a route handler.
  */
 export async function saveCheckIn(params: {
   principal: CallerPrincipal;
   text: string;
-  channel: "web" | "whatsapp";
+  channel: "web";
   voiceSignals?: VoiceSignalsInput | null;
   /**
    * Client-generated key, unique per check-in attempt. Web sends the same

@@ -6,7 +6,6 @@
 export interface PatientRow {
   id: string;
   auth_user_id: string | null;
-  whatsapp_user_id: string | null;
   consented_at: string | null;
   age: number | null;
   sex: string | null;
@@ -38,7 +37,7 @@ export interface Glp1TherapyRow {
 export interface CheckInRow {
   id: string;
   patient_id: string;
-  channel: "web" | "whatsapp";
+  channel: "web";
   transcript: string;
   raw_audio_path: string | null;
   task_type: string | null;

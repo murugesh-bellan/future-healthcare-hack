@@ -13,10 +13,12 @@
 create table if not exists public.patients (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users(id) on delete cascade,
-  whatsapp_user_id text unique,
   consented_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- WhatsApp support was removed (no channel-specific rows ever existed).
+alter table public.patients drop column if exists whatsapp_user_id;
 
 alter table public.patients add column if not exists age int;
 alter table public.patients add column if not exists sex text;
@@ -58,11 +60,16 @@ create table if not exists public.glp1_therapies (
 create table if not exists public.check_ins (
   id uuid primary key default gen_random_uuid(),
   patient_id uuid not null references public.patients(id) on delete cascade,
-  channel text not null check (channel in ('web', 'whatsapp')),
+  channel text not null check (channel in ('web')),
   transcript text not null,
   raw_audio_path text,
   created_at timestamptz not null default now()
 );
+
+-- Tighten an existing table's constraint too (the inline check above is a
+-- no-op once the table already exists) — safe, no 'whatsapp' rows ever existed.
+alter table public.check_ins drop constraint if exists check_ins_channel_check;
+alter table public.check_ins add constraint check_ins_channel_check check (channel in ('web'));
 
 alter table public.check_ins add column if not exists task_type text;
 alter table public.check_ins add column if not exists sample_rate_hz int;

@@ -5,5 +5,5 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
 };
 
-// Adds Eve's generated service routes, including the WhatsApp Chat SDK channel.
+// Adds Eve's generated service routes (e.g. the eve channel's session endpoints).
 export default withEve(nextConfig);

@@ -33,9 +33,7 @@ const bodySchema = z.object({
 /**
  * Direct-save path for web check-ins — saves the transcript (and any voice
  * signals) immediately, independent of the agent's turn, so the model isn't
- * on the hook for a DB round trip before it can start replying. WhatsApp has
- * no equivalent (no browser JS to call this from) and keeps using the
- * `save_check_in` tool via `lib/save-check-in.ts`'s shared `saveCheckIn`.
+ * on the hook for a DB round trip before it can start replying.
  */
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
