@@ -15,7 +15,8 @@ const CITATIONS: Citation[] = [
   {
     id: "cit_001",
     metricLabel: "What Undertone measures — Muscle-Integrity Index",
-    claim: "Voice features can classify frailty because vocal cords are muscle.",
+    claim:
+      "Voice features can classify frailty because vocal cords are muscle. This study models frailty across two axes — one tracking energy, one tracking sarcopenia — the same two signals your Strength Score is built from. Your care team can see the full coefficient breakdown behind each check-in.",
     source: "Vocal biomarkers of sarcopenic frailty",
     venue: "JMIR",
     year: 2024,

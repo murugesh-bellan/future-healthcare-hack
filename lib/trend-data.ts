@@ -33,15 +33,23 @@ function scoreForCount(count: number): number {
   return Math.max(0, Math.min(100, 50 + count * 6));
 }
 
-/** Carry-forward-fills SP04's 5 real check-ins across a WINDOW_DAYS span — same logic the live path uses, so the sample fallback isn't a flat placeholder. */
+/**
+ * Carry-forward-fills SP04's 5 real check-ins across a WINDOW_DAYS span —
+ * same logic the live path uses, so the sample fallback isn't a flat
+ * placeholder. Anchored so the LAST real check-in lands on the final day
+ * ("today") rather than padded with extra flat days after it — otherwise
+ * every "last 7 days" slice (the home page's 7-Day Trend card) always fell
+ * inside that dead padding and showed +0% even though the real data is
+ * dramatically declining.
+ */
 function sampleTrendPoints(): TrendPoint[] {
   const scoreByDay = new Map(SAMPLE_PATIENT.history.map((h) => [h.date, Math.round(h.score)]));
-  const firstDate = new Date(SAMPLE_PATIENT.history[0].date);
+  const lastDate = new Date(SAMPLE_PATIENT.history[SAMPLE_PATIENT.history.length - 1].date);
   let lastKnownScore = Math.round(SAMPLE_PATIENT.history[0].score);
 
   return Array.from({ length: WINDOW_DAYS }, (_, i) => {
-    const d = new Date(firstDate);
-    d.setDate(d.getDate() + i - Math.floor(WINDOW_DAYS / 4)); // centers the real 8-week span within the window
+    const d = new Date(lastDate);
+    d.setDate(d.getDate() - (WINDOW_DAYS - 1 - i));
     const key = dayKey(d);
     const known = scoreByDay.get(key);
     if (known !== undefined) lastKnownScore = known;
