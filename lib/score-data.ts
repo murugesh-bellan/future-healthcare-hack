@@ -8,10 +8,14 @@ import { findPatient } from "@/lib/prometheux-patients";
 
 // mockData.drift is a generic, unrelated fixture (hardcoded "recovering") —
 // using it here produced a "trending up, nice momentum" Trend Insight card
-// on top of a Trends page showing SP04's real 71->38 decline. This derives
-// the same summary from SP04's real, already-computed Prometheux drift
-// fields instead (see lib/prometheux-patients.ts), so the two agree.
-const SAMPLE_PATIENT = findPatient("SP04")!;
+// on top of a Trends page showing a real decline. This derives the same
+// summary from SP01's real, already-computed Prometheux drift fields
+// instead (see lib/prometheux-patients.ts), so the two agree. SP01, not
+// SP04, to match lib/trend-data.ts's sample patient: SP04's real history has
+// a single-step ~28-point drop that renders as an unrealistic cliff — real
+// sarcopenic decline is gradual, and SP01's real history (same
+// "deteriorating" direction, changePoint=false) actually is.
+const SAMPLE_PATIENT = findPatient("SP01")!;
 const SAMPLE_DRIFT: DriftSummary = {
   direction: SAMPLE_PATIENT.direction,
   changePointDetected: SAMPLE_PATIENT.changePoint,

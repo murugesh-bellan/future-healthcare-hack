@@ -6,17 +6,20 @@ import { findPatient } from "@/lib/prometheux-patients";
 
 const WINDOW_DAYS = 90;
 
-// Sample-data fallback is built from SP04's real Prometheux history, not
+// Sample-data fallback is built from SP01's real Prometheux history, not
 // generic mock data — without live credentials, every visitor was seeing a
-// near-flat placeholder line while the clinician view (lib/prometheux-patients.ts)
-// showed the real, dramatic trajectory for the same patient. SP04 has the
-// richest real per-construct pull from this session (vocal stability,
-// phonation efficiency, fatigue, functional capacity are all real numbers,
-// not authored); the other three constructs weren't individually pulled from
-// Prometheux this session, so they're derived from the same real functional-
-// capacity trajectory with a fixed offset rather than random noise, so the
-// *shape* stays authentic even where the exact number isn't independently measured.
-const SAMPLE_PATIENT = findPatient("SP04")!;
+// near-flat placeholder line. SP01, not SP04, on purpose: SP04's real history
+// has a genuine ~28-point drop inside a single 2-week gap between check-ins,
+// which renders as an unrealistic vertical cliff — sarcopenic decline is
+// gradual and cumulative, not a sudden crash (this was flagged directly and
+// confirmed against the cited JMIR 2024 mechanism). SP01 has the same real
+// "deteriorating" direction with Prometheux's own changePoint=false (no
+// single-step anomaly detected) — a smooth, steady 71.8->38.7 decline across
+// all 5 check-ins. SP01 doesn't have a per-construct breakdown independently
+// pulled from Prometheux the way SP04 does, so all 7 constructs below are
+// derived from SP01's real overall-score trajectory with fixed offsets —
+// same authentic shape, not independently measured per construct.
+const SAMPLE_PATIENT = findPatient("SP01")!;
 
 export interface ConstructTrend {
   name: string;
@@ -213,32 +216,29 @@ export async function loadConstructTrends(): Promise<{ constructs: ConstructTren
   }
 }
 
-// Real per-construct values pulled from Prometheux for SP04 (see
-// docs/prometheux-reasoning-engine.md) — vocal_stability_index and the
-// strengthComponent breakdown (functional_capacity, fatigue_index,
-// phonation_efficiency) across the same 5 real check-ins used everywhere
-// else this patient appears. functional_capacity is the direct real proxy
-// for muscle_integrity_index (same subsystem shown in the clinician
-// breakdown table). The remaining three constructs weren't individually
-// pulled from Prometheux this session, so they're derived from the real
-// functional_capacity series with a fixed offset — same authentic shape,
-// not independently measured.
-const REAL_VOCAL_STABILITY = [56.78, 56.5, 54.51, 30.35, 24.01];
-const REAL_PHONATION_EFFICIENCY = [63.646, 63.143, 61.92, 42.114, 37.463];
-const REAL_FATIGUE = [78.39, 78.25, 77.255, 15.175, 12.005];
-const REAL_FUNCTIONAL_CAPACITY = [90.6125, 90.26, 90.08, 29.7875, 21.0275];
+// SP01's real overall-score history (see lib/prometheux-patients.ts) — a
+// smooth, gradual decline, not SP04's cliff. SP01 wasn't individually pulled
+// per construct in Prometheux this session (only SP04 got that detailed
+// breakdown), so every construct below is derived from this same real
+// trajectory with a fixed offset — same authentic shape, not independently
+// measured per construct. fatigue_index is inverted (105 - v) to match this
+// app's own documented convention (components/ConstructTrendsSection.tsx):
+// unlike the other constructs, higher fatigue_index means MORE fatigued, so
+// it should rise, not fall, as the patient's condition declines.
+const REAL_OVERALL_SCORE = [71.755, 70.62, 61.479, 49.362, 38.74];
+const clamp = (v: number) => Math.max(10, Math.min(95, v));
 
 const SAMPLE_CONSTRUCT_SERIES: Record<string, number[]> = {
-  muscle_integrity_index: REAL_FUNCTIONAL_CAPACITY,
-  vocal_stability_index: REAL_VOCAL_STABILITY,
-  phonation_efficiency: REAL_PHONATION_EFFICIENCY,
-  fatigue_index: REAL_FATIGUE,
-  respiratory_support_index: REAL_FUNCTIONAL_CAPACITY.map((v) => Math.max(10, Math.min(95, v - 5))),
-  motor_coordination_index: REAL_FUNCTIONAL_CAPACITY.map((v) => Math.max(10, Math.min(95, v - 12))),
-  resonance_stability: REAL_VOCAL_STABILITY.map((v) => Math.max(10, Math.min(95, v + 8))),
+  muscle_integrity_index: REAL_OVERALL_SCORE.map(clamp),
+  vocal_stability_index: REAL_OVERALL_SCORE.map((v) => clamp(v - 5)),
+  phonation_efficiency: REAL_OVERALL_SCORE.map((v) => clamp(v - 10)),
+  respiratory_support_index: REAL_OVERALL_SCORE.map((v) => clamp(v - 3)),
+  motor_coordination_index: REAL_OVERALL_SCORE.map((v) => clamp(v - 15)),
+  resonance_stability: REAL_OVERALL_SCORE.map((v) => clamp(v + 5)),
+  fatigue_index: REAL_OVERALL_SCORE.map((v) => clamp(105 - v)),
 };
 
-/** Bundled sample data — the same real, dramatic SP04 trajectory shown in the clinician view, not a generic placeholder. */
+/** Bundled sample data — the same real, gradual SP01 decline shown in the clinician view, not a generic placeholder. */
 const SAMPLE_CONSTRUCT_TRENDS: ConstructTrend[] = Object.entries(CONSTRUCT_DISPLAY_NAMES).map(([name, displayName]) => ({
   name,
   displayName,
