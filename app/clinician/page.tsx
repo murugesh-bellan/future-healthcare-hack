@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PROMETHEUX_PATIENTS, computeEscalations } from "@/lib/prometheux-patients";
 import { EscalationCard } from "@/components/EscalationCard";
+import { requireClinician } from "@/lib/clinician-auth";
 
 const DIRECTION_STYLE: Record<string, string> = {
   deteriorating: "bg-error/15 text-error",
@@ -8,7 +9,8 @@ const DIRECTION_STYLE: Record<string, string> = {
   stable: "bg-surface-container-high text-on-surface-variant",
 };
 
-export default function ClinicianPage() {
+export default async function ClinicianPage() {
+  await requireClinician();
   const escalations = computeEscalations();
 
   return (

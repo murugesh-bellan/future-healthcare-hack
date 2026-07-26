@@ -1,124 +1,43 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { requireSupabaseAdmin } from "@/lib/supabase-admin";
-import { resolvePatientId } from "@/lib/patients";
-import { computePhysiologicalConstructs } from "@/lib/physiological-constructs";
-import type { VoiceSignals } from "@/lib/voice-signals";
+import { saveCheckIn } from "@/lib/save-check-in";
 
 const voiceSignalsSchema = z
   .object({
     meanPitchHz: z.number().nullable().optional(),
     pitchStdHz: z.number().nullable().optional(),
+    f0Cv: z.number().nullable().optional(),
     jitterPercent: z.number().nullable().optional(),
     shimmerPercent: z.number().nullable().optional(),
+    zcr: z.number().optional(),
+    hnrDb: z.number().nullable().optional(),
+    alphaRatioDb: z.number().optional(),
     meanEnergyRms: z.number().nullable().optional(),
+    energyNormalized: z.number().optional(),
     pauseRatio: z.number().nullable().optional(),
+    voicedRatio: z.number().optional(),
     speechRateWpm: z.number().nullable().optional(),
+    speechRateSyllPerSec: z.number().nullable().optional(),
     durationSeconds: z.number().nullable().optional(),
     voicedSegmentDurationSeconds: z.number().nullable().optional(),
-    hnrDb: z.number().nullable().optional(),
-    alphaRatioDb: z.number().nullable().optional(),
+    signalQuality: z.enum(["high", "medium", "low"]).optional(),
   })
   .optional();
 
-type VoiceSignalsInput = NonNullable<z.infer<typeof voiceSignalsSchema>>;
-
-/** Fills in whatever the client didn't send (older clients, or a signal that failed to extract) as null. */
-function toVoiceSignals(input: VoiceSignalsInput): VoiceSignals {
-  return {
-    meanPitchHz: input.meanPitchHz ?? null,
-    pitchStdHz: input.pitchStdHz ?? null,
-    jitterPercent: input.jitterPercent ?? null,
-    shimmerPercent: input.shimmerPercent ?? null,
-    meanEnergyRms: input.meanEnergyRms ?? 0,
-    pauseRatio: input.pauseRatio ?? 0,
-    durationSeconds: input.durationSeconds ?? 0,
-    voicedSegmentDurationSeconds: input.voicedSegmentDurationSeconds ?? 0,
-    speechRateWpm: input.speechRateWpm ?? null,
-    hnrDb: input.hnrDb ?? null,
-    alphaRatioDb: input.alphaRatioDb ?? null,
-  };
-}
-
-/** Maps the client-side VoiceSignals shape onto acoustic_biomarkers feature rows (one row per feature). */
-function toAcousticBiomarkerRows(checkInId: string, voiceSignals: VoiceSignalsInput) {
-  const features: { feature_name: string; raw_value: number | null; units: string | null }[] = [
-    { feature_name: "F0", raw_value: voiceSignals.meanPitchHz ?? null, units: "Hz" },
-    { feature_name: "F0_std", raw_value: voiceSignals.pitchStdHz ?? null, units: "Hz" },
-    { feature_name: "Jitter", raw_value: voiceSignals.jitterPercent ?? null, units: "%" },
-    { feature_name: "Shimmer", raw_value: voiceSignals.shimmerPercent ?? null, units: "%" },
-    { feature_name: "HNR", raw_value: voiceSignals.hnrDb ?? null, units: "dB" },
-    { feature_name: "AlphaRatio", raw_value: voiceSignals.alphaRatioDb ?? null, units: "dB" },
-    { feature_name: "Loudness", raw_value: voiceSignals.meanEnergyRms ?? null, units: "rms" },
-    { feature_name: "PauseRatio", raw_value: voiceSignals.pauseRatio ?? null, units: "ratio" },
-    { feature_name: "SpeechRate", raw_value: voiceSignals.speechRateWpm ?? null, units: "wpm" },
-    { feature_name: "RecordingDuration", raw_value: voiceSignals.durationSeconds ?? null, units: "s" },
-    { feature_name: "VoicedSegmentDuration", raw_value: voiceSignals.voicedSegmentDurationSeconds ?? null, units: "s" },
-  ];
-  return features
-    .filter((f) => f.raw_value !== null)
-    .map((f) => ({ check_in_id: checkInId, ...f }));
-}
-
 export default defineTool({
   description:
-    "Save a consented patient check-in transcript. The patient's identity comes from the active session, not from input. Requires consent: call confirm_consent first if the patient has not consented yet. If the client context for this turn includes voice_signals, pass them through unchanged as voiceSignals.",
+    "Save a consented patient check-in transcript. The patient's identity comes from the active session, not from input. Requires consent: call confirm_consent first if the patient has not confirmed yet. On web, check-ins are already saved directly by the client (see agent/instructions.md) — this tool is for WhatsApp and any other caller with no direct-save path. If the client context for this turn includes voice_signals, pass them through unchanged as voiceSignals. If it includes idempotency_key, always pass it through unchanged as idempotencyKey, even when you weren't expected to call this tool at all — it prevents a duplicate row if you end up calling it anyway.",
   inputSchema: z.object({
     text: z.string().min(1).max(5000),
     channel: z.enum(["web", "whatsapp"]),
     voiceSignals: voiceSignalsSchema,
+    idempotencyKey: z.string().min(1).max(200).optional(),
   }),
-  async execute({ text, channel, voiceSignals }, ctx) {
+  async execute({ text, channel, voiceSignals, idempotencyKey }, ctx) {
     const principal = ctx.session.auth.current;
     if (!principal) throw new Error("No authenticated caller for this session.");
 
-    const patientId = await resolvePatientId(principal);
-    const supabase = requireSupabaseAdmin();
-
-    const { data: patient, error: patientError } = await supabase
-      .from("patients")
-      .select("consented_at")
-      .eq("id", patientId)
-      .single();
-    if (patientError) throw new Error(patientError.message);
-    if (!patient.consented_at) {
-      throw new Error("Consent not confirmed yet. Call confirm_consent after the patient agrees, then retry.");
-    }
-
-    const { data: checkIn, error } = await supabase
-      .from("check_ins")
-      .insert({
-        patient_id: patientId,
-        transcript: text,
-        channel,
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-
-    if (voiceSignals) {
-      const rows = toAcousticBiomarkerRows(checkIn.id, voiceSignals);
-      if (rows.length > 0) {
-        const { error: signalsError } = await supabase.from("acoustic_biomarkers").insert(rows);
-        // Voice signals are supplementary telemetry — don't fail the check-in over it.
-        if (signalsError) console.error("Failed to save acoustic biomarkers:", signalsError.message);
-      }
-
-      // Physiological constructs (Vocal Stability, Phonation Efficiency, ...) mirror
-      // the same feature -> construct mapping proven in the Prometheux ontology —
-      // see lib/physiological-constructs.ts for the formula behind each one.
-      const constructs = computePhysiologicalConstructs(toVoiceSignals(voiceSignals));
-      const constructRows = constructs.map((c) => ({
-        check_in_id: checkIn.id,
-        name: c.name,
-        value: c.value,
-        formula: c.formula,
-        confidence: c.confidence,
-      }));
-      const { error: constructError } = await supabase.from("physiological_constructs").insert(constructRows);
-      if (constructError) console.error("Failed to save physiological constructs:", constructError.message);
-    }
-
-    return { saved: true, checkInId: checkIn.id };
+    await saveCheckIn({ principal, text, channel, voiceSignals, idempotencyKey });
+    return { saved: true };
   },
 });
