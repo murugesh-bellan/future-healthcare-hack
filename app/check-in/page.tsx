@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useEveAgent } from "eve/react";
 import { TopBar } from "@/components/TopBar";
+import { BottomNav } from "@/components/BottomNav";
 import { analyzeVoiceSignals, withSpeechRate, type VoiceSignals } from "@/lib/voice-signals";
 import { CONSTRUCT_DISPLAY_NAMES } from "@/lib/physiological-constructs";
 
@@ -410,8 +411,8 @@ export default function CheckInPage() {
 
   return (
     <>
-      <TopBar title="Daily Check-in" onBack="/" />
-      <main className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden px-container-margin pt-20 pb-safe">
+      <TopBar title="Daily Check-in" />
+      <main className="relative mx-auto flex min-h-screen w-full max-w-2xl flex-col items-center justify-center overflow-x-hidden px-container-margin pt-24 pb-32">
         <div className="pointer-events-none absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 opacity-40 blur-[40px]" />
 
         {phase === "loading" ? <p className="z-10 text-body-md text-on-surface-variant">Loading…</p> : null}
@@ -556,6 +557,7 @@ export default function CheckInPage() {
 
         <audio ref={audioRef} className="hidden" />
       </main>
+      <BottomNav />
     </>
   );
 }
