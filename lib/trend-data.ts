@@ -37,26 +37,46 @@ function scoreForCount(count: number): number {
 }
 
 /**
- * Carry-forward-fills SP04's 5 real check-ins across a WINDOW_DAYS span —
- * same logic the live path uses, so the sample fallback isn't a flat
- * placeholder. Anchored so the LAST real check-in lands on the final day
- * ("today") rather than padded with extra flat days after it — otherwise
- * every "last 7 days" slice (the home page's 7-Day Trend card) always fell
- * inside that dead padding and showed +0% even though the real data is
- * dramatically declining.
+ * Linearly interpolates between SP01's 5 real check-ins across a
+ * WINDOW_DAYS span, rather than carrying each value forward flat until the
+ * next check-in. Real check-ins are ~2 weeks apart, so a carry-forward fill
+ * renders as a staircase (flat, then a step) — misleading for something
+ * that's physiologically continuous (muscle mass doesn't jump overnight and
+ * hold, it drifts). Interpolating between the same real endpoints doesn't
+ * invent any new measurement, it just assumes gradual change between two
+ * real ones, which is the more honest reading of a "slow, steady decline."
+ * Anchored so the LAST real check-in lands on the final day ("today")
+ * rather than padded with extra flat days after it — otherwise every "last
+ * 7 days" slice (the home page's 7-Day Trend card) fell inside that dead
+ * padding and showed +0% even though the real data is declining.
  */
 function sampleTrendPoints(): TrendPoint[] {
-  const scoreByDay = new Map(SAMPLE_PATIENT.history.map((h) => [h.date, Math.round(h.score)]));
-  const lastDate = new Date(SAMPLE_PATIENT.history[SAMPLE_PATIENT.history.length - 1].date);
-  let lastKnownScore = Math.round(SAMPLE_PATIENT.history[0].score);
+  const history = SAMPLE_PATIENT.history;
+  const lastDate = new Date(history[history.length - 1].date);
+  const checkInDays = new Set(history.map((h) => h.date));
+
+  const scoreOn = (t: number): number => {
+    const first = history[0];
+    const last = history[history.length - 1];
+    const firstT = new Date(first.date).getTime();
+    const lastT = new Date(last.date).getTime();
+    if (t <= firstT) return first.score;
+    if (t >= lastT) return last.score;
+    for (let i = 0; i < history.length - 1; i++) {
+      const a = history[i];
+      const b = history[i + 1];
+      const aT = new Date(a.date).getTime();
+      const bT = new Date(b.date).getTime();
+      if (t >= aT && t <= bT) return a.score + (b.score - a.score) * ((t - aT) / (bT - aT));
+    }
+    return last.score;
+  };
 
   return Array.from({ length: WINDOW_DAYS }, (_, i) => {
     const d = new Date(lastDate);
     d.setDate(d.getDate() - (WINDOW_DAYS - 1 - i));
     const key = dayKey(d);
-    const known = scoreByDay.get(key);
-    if (known !== undefined) lastKnownScore = known;
-    return { date: key, score: lastKnownScore, checkInCount: known !== undefined ? 1 : 0 };
+    return { date: key, score: Math.round(scoreOn(d.getTime())), checkInCount: checkInDays.has(key) ? 1 : 0 };
   });
 }
 
