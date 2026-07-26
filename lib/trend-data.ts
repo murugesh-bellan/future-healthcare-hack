@@ -83,6 +83,15 @@ export async function loadTrend(): Promise<{ points: TrendPoint[]; source: DataS
     if (checkInsResult.error) throw checkInsResult.error;
     if (scoresResult.error) throw scoresResult.error;
 
+    // Without this guard, a signed-in demo user with zero seeded history
+    // silently "succeeds" here and every day falls through to the
+    // scoreForCount(0) = 50 default below — a flat, unexplained "50" line
+    // instead of the real sample data in the catch block. Same guard
+    // loadConstructTrends() already has for the same reason.
+    if ((checkInsResult.data?.length ?? 0) === 0 && (scoresResult.data?.length ?? 0) === 0) {
+      throw new Error("No check-in history yet.");
+    }
+
     const checkIns = (checkInsResult.data ?? []) as Pick<CheckInRow, "created_at">[];
     const countsByDay = new Map<string, number>();
     for (const row of checkIns) {
