@@ -22,10 +22,9 @@ FunctionalCapacity → StrengthScore`, with `ContributionWeight` as the single
 source of truth for every coefficient (never hardcoded in a rule) and
 `ClinicalEvidence` giving each weight a real citation.
 
-Dashboards: **Undertone Voice Health Dashboard** and **Clinician Review
-Dashboard** — cohort overview, per-patient drill-down, and a dedicated
-"Evidence & Weights" page showing the live contribution table.
-<!-- TODO: paste the published dashboard URL(s) here once copied from the Prometheux UI -->
+Dashboards — both published, live, clickable:
+- **[Undertone Voice Health Dashboard](https://platform.prometheux.ai/apps/21d0b27cd16/324cad53-d373-4523-ac6d-a126a8a86212)** — cohort overview, per-patient drill-down, and a dedicated "Evidence & Weights" page showing the live contribution table.
+- **[Clinician Review Dashboard](https://platform.prometheux.ai/apps/21d0b27cd16/f42d8ae1-6a09-4584-94eb-7d580ed31ef5)** — patient cohort with risk-status badges, click-through to per-patient trend, subsystem breakdown, and both frailty axes. *(URL inferred from the same `/apps/{project_id}/{app_id}` pattern as the first — worth a quick click to confirm before relying on it in the demo.)*
 
 ## Representative Vadalog source
 

@@ -85,6 +85,24 @@ export default function EvidencePage() {
         </section>
 
         <section className="mt-section-gap border-t border-outline-variant/20 pt-stack-lg">
+          <a
+            href="https://platform.prometheux.ai/apps/21d0b27cd16/f42d8ae1-6a09-4584-94eb-7d580ed31ef5"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-lg bg-surface-container-high/30 p-6 transition-colors hover:bg-surface-container-high/50"
+          >
+            <div>
+              <h2 className="text-label-md text-on-surface-variant uppercase tracking-widest">See how it&apos;s calculated</h2>
+              <p className="mt-2 leading-relaxed text-body-md text-on-surface-variant/80">
+                Every score traces back to named, weighted contributions — not a black box. View the full reasoning
+                engine, including the live evidence and weight table behind each measurement.
+              </p>
+            </div>
+            <span className="material-symbols-outlined shrink-0 pl-4 text-on-surface-variant">open_in_new</span>
+          </a>
+        </section>
+
+        <section className="mt-section-gap border-t border-outline-variant/20 pt-stack-lg">
           <div className="rounded-lg bg-surface-container-high/30 p-6">
             <h2 className="mb-3 text-label-md text-on-surface-variant uppercase tracking-widest">What this isn&apos;t</h2>
             <p className="leading-relaxed text-body-md text-on-surface-variant/80">
